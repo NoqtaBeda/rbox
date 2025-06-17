@@ -1,0 +1,76 @@
+/**
+ * Copyright (c) 2026 NoqtaBeda (noqtabeda@163.com)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ **/
+
+#include <rbox/fixed_map/string_key.hpp>
+
+#include "tests/fixed_map/string_key/string_key_test_options.hpp"
+
+template <class CharT, bool CI>
+void test_naive_common()
+{
+    using KVPair = std::pair<std::basic_string<CharT>, wrapper_t<double>>;
+    constexpr auto make_kv_pairs = []() constexpr {
+        return std::vector<KVPair>{
+            {to<CharT>("Apple"), {.value = 12.5}},
+            {to<CharT>("Pineapple"), {.value = 25.0}},
+            {to<CharT>("Pen"), {.value = 37.5}},
+        };
+    };
+    constexpr auto options = rbox::string_key_fixed_map_options{
+        .ascii_case_insensitive = CI,
+        .optimization_threshold = 4,
+    };
+    constexpr auto map = FIXED_MAP(make_kv_pairs(), options);
+    EXPECT_THAT(display_string_of(^^decltype(map)), testing::HasSubstr("naive_with_skey"));
+    EXPECT_EQ_STATIC(3, map.size());
+
+    EXPECT_EQ_STATIC(12.5, map[to<CharT>("Apple")]);
+    EXPECT_FOUND_STATIC(25.0, map, to<CharT>("Pineapple"));
+    EXPECT_FOUND_STATIC(37.5, map, to<CharT>("Pen"));
+
+    EXPECT_EQ_STATIC(magic_value, map[to<CharT>("")]);
+    EXPECT_EQ_STATIC(CI ? 12.5 : magic_value, map[to<CharT>("apple")]);
+    EXPECT_EQ_STATIC(CI ? 25.0 : magic_value, map[to<CharT>("PINEAPPLE")]);
+    EXPECT_EQ_STATIC(CI ? 37.5 : magic_value, map[to<CharT>("peN")]);
+
+    EXPECT_NOT_FOUND_STATIC(magic_value, map, to<CharT>("Pan"));
+    EXPECT_NOT_FOUND_STATIC(magic_value, map, to<CharT>("App"));
+}
+
+#define MAKE_NAIVE_MAP_TESTS(char_type, CharTypeName) \
+    TEST(FixedMap, StringKeyNaive##CharTypeName)      \
+    {                                                 \
+        test_naive_common<char_type, false>();        \
+    }                                                 \
+    TEST(FixedMap, StringKeyNaiveCI##CharTypeName)    \
+    {                                                 \
+        test_naive_common<char_type, true>();         \
+    }
+
+#define FOR_EACH_CHARACTER_TYPE(F) \
+    F(char, Char)                  \
+    F(wchar_t, WChar)              \
+    F(char8_t, Char8)              \
+    F(char16_t, Char16)            \
+    F(char32_t, Char32)
+
+FOR_EACH_CHARACTER_TYPE(MAKE_NAIVE_MAP_TESTS)

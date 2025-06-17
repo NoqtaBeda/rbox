@@ -1,0 +1,69 @@
+/**
+ * Copyright (c) 2026 NoqtaBeda (noqtabeda@163.com)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ **/
+
+#ifndef RBOX_TYPE_TRAITS_ARITHMETIC_TYPES_HPP
+#define RBOX_TYPE_TRAITS_ARITHMETIC_TYPES_HPP
+
+#include <cstdint>
+#include <meta>
+#include <rbox/utils/config.hpp>
+#include <type_traits>
+
+namespace rbox {
+namespace impl {
+consteval bool is_char_type(std::meta::info T)
+{
+    return T == ^^char || T == ^^wchar_t || T == ^^char8_t || T == ^^char16_t || T == ^^char32_t;
+}
+
+consteval auto integral_to_integer_impl(std::meta::info T) -> std::meta::info
+{
+    switch (size_of(T)) {
+        case 1:
+            return is_signed_type(T) ? ^^int8_t : ^^uint8_t;
+        case 2:
+            return is_signed_type(T) ? ^^int16_t : ^^uint16_t;
+        case 4:
+            return is_signed_type(T) ? ^^int32_t : ^^uint32_t;
+        case 8:
+            return is_signed_type(T) ? ^^int64_t : ^^uint64_t;
+        default:
+            compile_error("Unsupported type.");
+    }
+}
+}  // namespace impl
+
+template <class T>
+concept char_type = impl::is_char_type(std::meta::remove_cv(^^T));
+
+template <class T>
+concept non_bool_integral = std::is_integral_v<T> && !std::is_same_v<std::remove_cv_t<T>, bool>;
+
+template <class T>
+concept integer_type = non_bool_integral<T> && !char_type<T>;
+
+template <class T>
+    requires (std::is_integral_v<T>)
+using integral_to_integer_t = [:impl::integral_to_integer_impl(^^T):];
+}  // namespace rbox
+
+#endif  // RBOX_TYPE_TRAITS_ARITHMETIC_TYPES_HPP

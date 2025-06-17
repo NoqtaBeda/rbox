@@ -1,0 +1,892 @@
+/**
+ * Copyright (c) 2026 NoqtaBeda (noqtabeda@163.com)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ **/
+
+#ifndef RBOX_UTILS_STRING_BUILDER_HPP
+#define RBOX_UTILS_STRING_BUILDER_HPP
+
+#include <charconv>
+#include <iterator>
+#include <rbox/type_traits/arithmetic_types.hpp>
+#include <rbox/utils/string_encoding.hpp>
+
+namespace std::pmr {
+template <class T>
+class polymorphic_allocator;  // Defined in <memory_resource>
+}
+
+namespace rbox {
+template <char_type CharT, class Allocator = std::allocator<CharT>>
+class basic_string_builder {
+public:
+    constexpr basic_string_builder() : buffer_(nullptr), cur_(nullptr), end_(nullptr), alloc_() {}
+
+    explicit constexpr basic_string_builder(Allocator alloc)
+        : buffer_(nullptr), cur_(nullptr), end_(nullptr), alloc_(std::move(alloc))
+    {
+    }
+
+    explicit constexpr basic_string_builder(size_t initial_size) : alloc_()
+    {
+        buffer_ = alloc_.allocate(initial_size);
+        cur_ = buffer_;
+        end_ = buffer_ + initial_size;
+    }
+
+    constexpr basic_string_builder(size_t initial_size, Allocator alloc) : alloc_(std::move(alloc))
+    {
+        buffer_ = alloc_.allocate(initial_size);
+        cur_ = buffer_;
+        end_ = buffer_ + initial_size;
+    }
+
+    basic_string_builder(const basic_string_builder&) = delete;
+    auto operator=(const basic_string_builder&) -> basic_string_builder& = delete;
+
+    constexpr basic_string_builder(basic_string_builder&&) = default;
+    constexpr auto operator=(basic_string_builder&&) -> basic_string_builder& = default;
+
+    constexpr ~basic_string_builder()
+    {
+        if (buffer_ != nullptr) {
+            alloc_.deallocate(buffer_, end_ - buffer_);
+        }
+    }
+
+    constexpr auto size() const -> size_t
+    {
+        return static_cast<size_t>(cur_ - buffer_);
+    }
+
+    constexpr auto str() const -> std::basic_string<CharT>
+    {
+        return {buffer_, cur_};
+    }
+
+    constexpr auto strview() const& -> std::basic_string_view<CharT>
+    {
+        return {buffer_, cur_};
+    }
+
+    constexpr auto reserve_at_least(size_t n) -> basic_string_builder&
+    {
+        if consteval {
+            if (cur_ == nullptr) {
+                buffer_ = alloc_.allocate(n);
+                cur_ = buffer_;
+                end_ = buffer_ + n;
+                return *this;
+            }
+        }
+        // For non-consteval cases, pointer arithmetic 0 + n > 0 is enough to cover nullptr cases.
+        if (cur_ + n <= end_) [[likely]] {
+            return *this;
+        }
+        auto cur_capacity = static_cast<size_t>(end_ - buffer_);
+        auto new_capacity = cur_capacity + std::max<size_t>(cur_capacity, n);
+
+        auto* cur_buffer = buffer_;
+        auto* new_buffer = alloc_.allocate(new_capacity);
+        auto cur_n = static_cast<size_t>(cur_ - cur_buffer);
+        for (size_t i = 0; i < cur_n; ++i) {
+            new_buffer[i] = cur_buffer[i];
+        }
+        cur_ = new_buffer + cur_n;
+        end_ = new_buffer + new_capacity;
+        alloc_.deallocate(buffer_, cur_capacity);
+        buffer_ = new_buffer;
+        return *this;
+    }
+
+    constexpr auto unwind(size_t n = 1) -> basic_string_builder&
+    {
+        cur_ = std::max(cur_ - n, buffer_);
+        return *this;
+    }
+
+    constexpr auto unwind_unsafe(size_t n = 1) -> basic_string_builder&
+    {
+        cur_ -= n;
+        return *this;
+    }
+
+    // -------- Append single char --------
+
+    constexpr auto append_char_unsafe(CharT c) -> basic_string_builder&
+    {
+        *cur_++ = c;
+        return *this;
+    }
+
+    constexpr auto append_char_unsafe(CharT c, size_t count) -> basic_string_builder&
+    {
+        for (size_t i = 0; i < count; ++i) {
+            *cur_++ = c;
+        }
+        return *this;
+    }
+
+    constexpr auto append_char(CharT c) -> basic_string_builder&
+    {
+        reserve_at_least(1);
+        return append_char_unsafe(c);
+    }
+
+    constexpr auto append_char(CharT c, size_t count) -> basic_string_builder&
+    {
+        reserve_at_least(count);
+        return append_char_unsafe(c, count);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_char_by_unsafe(CharT c) -> basic_string_builder&
+    {
+        auto [status, next_head] = write_escaped_character_by_unsafe<Mode>(cur_, c);
+        if (escaping_status::done == status) {
+            cur_ = next_head;
+        } else {
+            *cur_++ = c;  // No escaping or conversion
+        }
+        return *this;
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_char_by(CharT c) -> basic_string_builder&
+    {
+        reserve_at_least(6);  // 6 : Maximum length of escaped character (e.g. "\u0000")
+        return append_char_by_unsafe<Mode>(c);
+    }
+
+    // -------- Append single code point --------
+
+    constexpr auto append_utf_code_point_unsafe(char32_t code_point) -> basic_string_builder&
+    {
+        if (is_valid_code_point(code_point)) [[likely]] {
+            cur_ = encode_code_point_unsafe(cur_, code_point);
+        } else {
+            cur_ = encode_code_point_unsafe(cur_, replacement_code_point);
+        }
+        return *this;
+    }
+
+    constexpr auto append_utf_code_point(char32_t code_point) -> basic_string_builder&
+    {
+        reserve_at_least(4);
+        return append_utf_code_point_unsafe(code_point);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_utf_code_point_by_unsafe(char32_t code_point) -> basic_string_builder&
+    {
+        auto [status, next_head] = write_escaped_character_by_unsafe<Mode>(cur_, code_point);
+        if (escaping_status::done == status) {
+            cur_ = next_head;
+        } else if (is_valid_code_point(code_point)) [[likely]] {
+            cur_ = encode_code_point_unsafe(cur_, code_point);
+        } else {
+            cur_ = encode_code_point_unsafe(cur_, replacement_code_point);
+        }
+        return *this;
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_utf_code_point_by(char32_t code_point) -> basic_string_builder&
+    {
+        reserve_at_least(6);
+        return append_utf_code_point_by_unsafe<Mode>(code_point);
+    }
+
+    // -------- Append string without UTF validation & conversion --------
+
+    constexpr auto append_string_unsafe(const CharT* str, const CharT* str_end)
+        -> basic_string_builder&
+    {
+        auto n = static_cast<size_t>(str_end - str);
+        for (size_t i = 0; i < n; ++i) {
+            cur_[i] = str[i];
+        }
+        cur_ += n;
+        return *this;
+    }
+
+    constexpr auto append_string_unsafe(const CharT* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != static_cast<CharT>('\0')) ++p;
+        auto str_end = p;
+        return append_string_unsafe(str, str_end);
+    }
+
+    constexpr auto append_string_unsafe(std::basic_string_view<CharT> str) -> basic_string_builder&
+    {
+        for (auto c : str) {
+            *cur_++ = c;
+        }
+        return *this;
+    }
+
+    constexpr auto append_string(const CharT* str, const CharT* str_end) -> basic_string_builder&
+    {
+        reserve_at_least(str_end - str);
+        return append_string_unsafe(str, str_end);
+    }
+
+    constexpr auto append_string(const CharT* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != static_cast<CharT>('\0')) ++p;
+        auto str_end = p;
+        return append_string(str, str_end);
+    }
+
+    constexpr auto append_string(std::basic_string_view<CharT> str) -> basic_string_builder&
+    {
+        reserve_at_least(str.length());
+        return append_string_unsafe(str);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_string_by_unsafe(const CharT* str, const CharT* str_end)
+        -> basic_string_builder&
+    {
+        for (; str < str_end; ++str) {
+            auto [status, next_head] = write_escaped_character_by_unsafe<Mode>(cur_, *str);
+            if (escaping_status::done == status) {
+                cur_ = next_head;
+            } else {
+                *cur_++ = *str;  // No escaping or conversion
+            }
+        }
+        return *this;
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_string_by_unsafe(const CharT* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != static_cast<CharT>('\0')) ++p;
+        auto str_end = p;
+        return append_string_by_unsafe<Mode>(str, str_end);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_string_by_unsafe(std::basic_string_view<CharT> str)
+        -> basic_string_builder&
+    {
+        return append_string_by_unsafe<Mode>(str.data(), str.data() + str.size());
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_string_by(const CharT* str, const CharT* str_end) -> basic_string_builder&
+    {
+        reserve_at_least(
+            6 * (str_end - str));  // 6 : Max length of escaped character (e.g. "\u0000")
+        return append_string_by_unsafe<Mode>(str, str_end);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_string_by(const CharT* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != static_cast<CharT>('\0')) ++p;
+        auto str_end = p;
+        return append_string_by<Mode>(str, str_end);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_string_by(std::basic_string_view<CharT> str) -> basic_string_builder&
+    {
+        return append_string_by<Mode>(str.data(), str.data() + str.size());
+    }
+
+    // -------- Append C-style string without UTF validation & conversion --------
+
+    constexpr auto append_c_string_unsafe(const char* str, const char* str_end)
+        -> basic_string_builder&
+    {
+        while (str < str_end) {
+            *cur_++ = static_cast<CharT>(*str++);
+        }
+        return *this;
+    }
+
+    constexpr auto append_c_string_unsafe(const char* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != '\0') ++p;
+        auto str_end = p;
+        return append_c_string_unsafe(str, str_end);
+    }
+
+    constexpr auto append_c_string_unsafe(std::string_view str) -> basic_string_builder&
+    {
+        return append_c_string_unsafe(str.data(), str.data() + str.size());
+    }
+
+    constexpr auto append_c_string(const char* str, const char* str_end) -> basic_string_builder&
+    {
+        reserve_at_least(str_end - str);
+        return append_c_string_unsafe(str, str_end);
+    }
+
+    constexpr auto append_c_string(const char* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != '\0') ++p;
+        auto str_end = p;
+        return append_c_string(str, str_end);
+    }
+
+    constexpr auto append_c_string(std::string_view str) -> basic_string_builder&
+    {
+        reserve_at_least(str.size());
+        return append_c_string_unsafe(str);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_c_string_by_unsafe(const char* str, const char* str_end)
+        -> basic_string_builder&
+    {
+        for (; str < str_end; ++str) {
+            append_char_by_unsafe<Mode>(static_cast<CharT>(*str));
+        }
+        return *this;
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_c_string_by_unsafe(const char* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != '\0') ++p;
+        auto str_end = p;
+        return append_c_string_by_unsafe<Mode>(str, str_end);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_c_string_by_unsafe(std::string_view str) -> basic_string_builder&
+    {
+        return append_c_string_by_unsafe<Mode>(str.data(), str.data() + str.size());
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_c_string_by(const char* str, const char* str_end) -> basic_string_builder&
+    {
+        reserve_at_least(
+            6 * (str_end - str));  // 6 : Max length of escaped character (e.g. "\u0000")
+        return append_c_string_by_unsafe<Mode>(str, str_end);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_c_string_by(const char* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != '\0') ++p;
+        auto str_end = p;
+        return append_c_string_by<Mode>(str, str_end);
+    }
+
+    template <escaping_mode Mode>
+    constexpr auto append_c_string_by(std::string_view str) -> basic_string_builder&
+    {
+        reserve_at_least(6 * str.size());  // 6 : Max length of escaped character (e.g. "\u0000")
+        return append_c_string_by_unsafe<Mode>(str);
+    }
+
+    // -------- Append string with UTF validation & conversion --------
+
+    template <char_type OtherCharT>
+    constexpr auto append_utf_string_unsafe(const OtherCharT* str, const OtherCharT* str_end)
+        -> basic_string_builder&
+    {
+        if constexpr (sizeof(OtherCharT) == sizeof(CharT)) {
+            // No UTF conversion. Replaces invalid UTF sequences with '�'.
+            while (str < str_end) {
+                auto [code_point, next_str] = decode_code_point(str, str_end);
+                if (code_point != invalid_code_point) [[likely]] {
+                    cur_ = encode_code_point_unsafe(cur_, code_point);
+                    str = next_str;
+                    continue;
+                }
+                str = consume_utf_invalid_sequence(str, str_end);
+                cur_ = encode_code_point_unsafe(cur_, replacement_code_point);
+            }
+        } else {
+            // UTF conversion. Replaces invalid UTF sequences with '�'.
+            while (str < str_end) {
+                auto res = utf_convert(cur_, end_, str, str_end);
+                cur_ = res.out_ptr;
+                if (encoding_status::done == res.status) {
+                    return *this;
+                }
+                if (encoding_status::buffer_run_out == res.status) {
+                    // This branch is kept although it shall not happen.
+                    // Buffer will never run out as long as >= 4x buffer space is prepared.
+                    reserve_at_least(static_cast<size_t>(str_end - res.in_ptr) * 4);
+                    str = res.in_ptr;
+                } else {
+                    str = consume_utf_invalid_sequence(res.in_ptr, str_end);
+                    append_utf_code_point_unsafe(replacement_code_point);
+                }
+            }
+        }
+        return *this;
+    }
+
+    template <char_type OtherCharT>
+    constexpr auto append_utf_string_unsafe(const OtherCharT* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != static_cast<OtherCharT>('\0')) ++p;
+        auto str_end = p;
+        return append_utf_string_unsafe(str, str_end);
+    }
+
+    template <char_type OtherCharT>
+    constexpr auto append_utf_string_unsafe(std::basic_string_view<OtherCharT> str)
+        -> basic_string_builder&
+    {
+        return append_utf_string_unsafe(str.data(), str.data() + str.length());
+    }
+
+    template <char_type OtherCharT, class Traits, class OtherAllocator>
+    constexpr auto append_utf_string_unsafe(
+        const std::basic_string<OtherCharT, Traits, OtherAllocator>& str) -> basic_string_builder&
+    {
+        return append_utf_string_unsafe(str.data(), str.data() + str.length());
+    }
+
+    template <char_type OtherCharT>
+    constexpr auto append_utf_string(const OtherCharT* str, const OtherCharT* str_end)
+        -> basic_string_builder&
+    {
+        reserve_at_least(4 * (str_end - str));
+        return append_utf_string_unsafe(str, str_end);
+    }
+
+    template <char_type OtherCharT>
+    constexpr auto append_utf_string(const OtherCharT* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != static_cast<OtherCharT>('\0')) ++p;
+        auto str_end = p;
+        return append_utf_string(str, str_end);
+    }
+
+    template <char_type OtherCharT>
+    constexpr auto append_utf_string(std::basic_string_view<OtherCharT> str)
+        -> basic_string_builder&
+    {
+        return append_utf_string(str.data(), str.data() + str.length());
+    }
+
+    template <char_type OtherCharT, class Traits, class OtherAllocator>
+    constexpr auto append_utf_string(
+        const std::basic_string<OtherCharT, Traits, OtherAllocator>& str) -> basic_string_builder&
+    {
+        return append_utf_string(str.data(), str.data() + str.length());
+    }
+
+    template <escaping_mode Mode, char_type OtherCharT>
+    constexpr auto append_utf_string_by_unsafe(const OtherCharT* str, const OtherCharT* str_end)
+        -> basic_string_builder&
+    {
+        if constexpr (sizeof(OtherCharT) == sizeof(CharT)) {
+            // No UTF conversion. Replaces invalid UTF sequences with '�'.
+            while (str < str_end) {
+                auto [status, next_head] = write_escaped_character_by_unsafe<Mode>(cur_, *str);
+                if (escaping_status::done == status) {
+                    cur_ = next_head;
+                    str += 1;
+                    continue;
+                }
+                auto [code_point, next_str] = decode_code_point(str, str_end);
+                if (code_point != invalid_code_point) [[likely]] {
+                    cur_ = encode_code_point_unsafe(cur_, code_point);
+                    str = next_str;
+                    continue;
+                }
+                str = consume_utf_invalid_sequence(str, str_end);
+                cur_ = encode_code_point_unsafe(cur_, replacement_code_point);
+            }
+        } else {
+            // UTF conversion. Replaces invalid UTF sequences with '�'.
+            while (str < str_end) {
+                auto res = utf_convert_by<Mode>(cur_, end_, str, str_end);
+                cur_ = res.out_ptr;
+                if (encoding_status::done == res.status) {
+                    return *this;
+                }
+                if (encoding_status::buffer_run_out == res.status) {
+                    // This branch is kept although it shall not happen.
+                    // Buffer will never run out as long as >= 6x buffer space is prepared.
+                    reserve_at_least(static_cast<size_t>(str_end - res.in_ptr) * 6);
+                    str = res.in_ptr;
+                } else {
+                    str = consume_utf_invalid_sequence(res.in_ptr, str_end);
+                    append_utf_code_point_unsafe(replacement_code_point);
+                }
+            }
+        }
+        return *this;
+    }
+
+    template <escaping_mode Mode, char_type OtherCharT>
+    constexpr auto append_utf_string_by_unsafe(const OtherCharT* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != static_cast<OtherCharT>('\0')) ++p;
+        auto str_end = p;
+        return append_utf_string_by_unsafe<Mode>(str, str_end);
+    }
+
+    template <escaping_mode Mode, char_type OtherCharT>
+    constexpr auto append_utf_string_by_unsafe(std::basic_string_view<OtherCharT> str)
+        -> basic_string_builder&
+    {
+        return append_utf_string_by_unsafe<Mode>(str.data(), str.data() + str.length());
+    }
+
+    template <escaping_mode Mode, char_type OtherCharT, class Traits, class OtherAllocator>
+    constexpr auto append_utf_string_by_unsafe(
+        const std::basic_string<OtherCharT, Traits, OtherAllocator>& str) -> basic_string_builder&
+    {
+        return append_utf_string_by_unsafe<Mode>(str.data(), str.data() + str.length());
+    }
+
+    template <escaping_mode Mode, char_type OtherCharT>
+    constexpr auto append_utf_string_by(const OtherCharT* str, const OtherCharT* str_end)
+        -> basic_string_builder&
+    {
+        reserve_at_least(
+            6 * (str_end - str));  // 6 : Max length of escaped character (e.g. "\u0000")
+        return append_utf_string_by_unsafe<Mode>(str, str_end);
+    }
+
+    template <escaping_mode Mode, char_type OtherCharT>
+    constexpr auto append_utf_string_by(const OtherCharT* str) -> basic_string_builder&
+    {
+        auto* p = str;
+        while (*p != static_cast<OtherCharT>('\0')) ++p;
+        auto str_end = p;
+        return append_utf_string_by<Mode>(str, str_end);
+    }
+
+    template <escaping_mode Mode, char_type OtherCharT>
+    constexpr auto append_utf_string_by(std::basic_string_view<OtherCharT> str)
+        -> basic_string_builder&
+    {
+        return append_utf_string_by<Mode>(str.data(), str.data() + str.length());
+    }
+
+    template <escaping_mode Mode, char_type OtherCharT, class Traits, class OtherAllocator>
+    constexpr auto append_utf_string_by(
+        const std::basic_string<OtherCharT, Traits, OtherAllocator>& str) -> basic_string_builder&
+    {
+        return append_utf_string_by<Mode>(str.data(), str.data() + str.length());
+    }
+
+    // -------- Append arithmetic types --------
+
+    constexpr auto append_bool(bool value) -> basic_string_builder&
+    {
+        reserve_at_least(5);
+        constexpr auto true_str = std::string_view{"true"};
+        constexpr auto false_str = std::string_view{"false"};
+        for (auto c : (value ? true_str : false_str)) {
+            *cur_++ = static_cast<CharT>(c);
+        }
+        return *this;
+    }
+
+    template <non_bool_integral IntegerT>
+        requires (sizeof(IntegerT) <= sizeof(int64_t))
+    constexpr auto append_integer(IntegerT value, int base = 10) -> basic_string_builder&
+    {
+        constexpr size_t buffer_size = sizeof(IntegerT) * 8 + 1;
+        append_numeric(buffer_size, value, base);
+        return *this;
+    }
+
+    constexpr auto append_floating_point(float value) -> basic_string_builder&
+    {
+        constexpr size_t buffer_size = 50;
+        append_numeric(buffer_size, value);
+        return *this;
+    }
+
+    constexpr auto append_floating_point(double value) -> basic_string_builder&
+    {
+        constexpr size_t buffer_size = 330;
+        append_numeric(buffer_size, value);
+        return *this;
+    }
+
+    constexpr auto append_floating_point(long double value) -> basic_string_builder&
+    {
+        constexpr size_t buffer_size = 330;
+        append_numeric_with_retry(buffer_size, value);
+        return *this;
+    }
+
+    template <std::floating_point FloatT>
+    constexpr auto append_floating_point(FloatT value, std::chars_format fmt)
+        -> basic_string_builder&
+    {
+        constexpr size_t buffer_size = sizeof(FloatT) <= sizeof(float) ? 50 : 330;
+        append_numeric_with_retry(buffer_size, value, fmt);
+        return *this;
+    }
+
+    template <std::floating_point FloatT>
+    constexpr auto append_floating_point(FloatT value, std::chars_format fmt, int precision)
+        -> basic_string_builder&
+    {
+        constexpr size_t buffer_size = sizeof(FloatT) <= sizeof(float) ? 50 : 330;
+        append_numeric_with_retry(buffer_size, value, fmt, precision);
+        return *this;
+    }
+
+    // Similar idiom with std::back_insert_iterator
+    class safe_output_iterator {
+    public:
+        using iterator_category = std::output_iterator_tag;
+        using value_type = void;
+        using difference_type = ptrdiff_t;
+        using pointer = void;
+        using reference = void;
+
+        constexpr explicit safe_output_iterator(basic_string_builder* self) : self_(self) {}
+
+        constexpr auto operator*() -> safe_output_iterator&
+        {
+            return *this;
+        }
+        constexpr auto operator++() -> safe_output_iterator&
+        {
+            return *this;
+        }
+        constexpr auto operator++(int) -> safe_output_iterator
+        {
+            return *this;
+        }
+
+        constexpr auto operator=(CharT c) -> safe_output_iterator&
+        {
+            self_->append_char(c);
+            return *this;
+        }
+
+    private:
+        basic_string_builder* self_;
+    };
+
+    // Similar idiom with std::back_insert_iterator
+    class unsafe_output_iterator {
+    public:
+        using iterator_category = std::output_iterator_tag;
+        using value_type = void;
+        using difference_type = ptrdiff_t;
+        using pointer = void;
+        using reference = void;
+
+        constexpr explicit unsafe_output_iterator(basic_string_builder* self) : cur_(&self->cur_) {}
+
+        constexpr auto operator*() -> unsafe_output_iterator&
+        {
+            return *this;
+        }
+        constexpr auto operator++() -> unsafe_output_iterator&
+        {
+            return *this;
+        }
+        constexpr auto operator++(int) -> unsafe_output_iterator
+        {
+            return *this;
+        }
+
+        constexpr auto operator=(CharT c) -> unsafe_output_iterator&
+        {
+            **cur_ = c;
+            ++*cur_;
+            return *this;
+        }
+
+    private:
+        CharT** cur_;
+    };
+
+    constexpr auto out() -> safe_output_iterator
+    {
+        return safe_output_iterator{this};
+    }
+
+    constexpr auto out_unsafe() -> unsafe_output_iterator
+    {
+        return unsafe_output_iterator{this};
+    }
+
+private:
+    constexpr size_t remaining_capacity() const
+    {
+        return static_cast<size_t>(end_ - cur_);
+    }
+
+    template <class... Args>
+    constexpr void append_numeric(size_t buffer_size, Args... args)
+    {
+        reserve_at_least(buffer_size);
+
+        if constexpr (std::is_same_v<CharT, char>) {
+            cur_ = std::to_chars(cur_, end_, args...).ptr;
+        } else if constexpr (std::is_same_v<CharT, char8_t>) {
+            if !consteval {
+                auto* cur_char = reinterpret_cast<char*>(cur_);
+                auto* end_char = reinterpret_cast<char*>(end_);
+                cur_ = reinterpret_cast<char8_t*>(std::to_chars(cur_char, end_char, args...).ptr);
+            } else {
+                append_numeric_with_char_buffer(args...);
+            }
+        } else {
+            append_numeric_with_char_buffer(args...);
+        }
+    }
+
+    template <class... Args>
+    consteval void append_numeric_with_retry_consteval(size_t buffer_size, Args... args)
+    {
+        reserve_at_least(buffer_size);
+        while (true) {
+            auto temp_buffer_size = remaining_capacity();
+            // For compile-time evaluation: We ignore Allocator since it may not be constexpr.
+            auto temp_buffer = new char[temp_buffer_size];
+            auto [ptr, ec] = std::to_chars(temp_buffer, temp_buffer + temp_buffer_size, args...);
+            if (std::errc{} == ec) {
+                for (auto* p = temp_buffer; p != ptr; ++p) {
+                    *cur_++ = static_cast<CharT>(*p);
+                }
+                delete[] temp_buffer;
+                return;
+            }
+            buffer_size *= 2;
+            reserve_at_least(buffer_size);
+            delete[] temp_buffer;
+        }
+    }
+
+    template <class... Args>
+    void append_numeric_with_retry_non_consteval(size_t buffer_size, Args... args)
+    {
+        reserve_at_least(buffer_size);
+        if constexpr (sizeof(CharT) == sizeof(char)) {
+            // (1) No additional buffer needed
+            while (true) {
+                char* cur_as_char = reinterpret_cast<char*>(cur_);
+                char* end_as_char = reinterpret_cast<char*>(end_);
+                auto [ptr, ec] = std::to_chars(cur_as_char, end_as_char, args...);
+                if (std::errc{} == ec) [[likely]] {
+                    cur_ = reinterpret_cast<CharT*>(ptr);
+                    return;
+                }
+                buffer_size *= 2;
+                reserve_at_least(buffer_size);
+            }
+        } else {
+            // (2) Additional buffer needed
+            while (true) {
+                char* buffer = reinterpret_cast<char*>(alloc_.allocate(buffer_size));
+                auto [ptr, ec] = std::to_chars(buffer, buffer + buffer_size, args...);
+                if (std::errc{} == ec) [[likely]] {
+                    for (auto* p = buffer; p != ptr; ++p) {
+                        *cur_++ = static_cast<CharT>(*p);
+                    }
+                    alloc_.deallocate(reinterpret_cast<CharT*>(buffer), buffer_size);
+                    return;
+                }
+                buffer_size *= 2;
+                reserve_at_least(buffer_size);
+                alloc_.deallocate(reinterpret_cast<CharT*>(buffer), buffer_size);
+            }
+        }
+    }
+
+    template <class... Args>
+    constexpr void append_numeric_with_retry(size_t buffer_size, Args... args)
+    {
+        if consteval {
+            append_numeric_with_retry_consteval(buffer_size, args...);
+        } else {
+            append_numeric_with_retry_non_consteval(buffer_size, args...);
+        }
+    }
+
+    template <class IntegerT>
+        requires (non_bool_integral<IntegerT>)
+    constexpr void append_numeric_with_char_buffer(IntegerT value, int base)
+    {
+        constexpr auto buffer_size = sizeof(IntegerT) * 8 + 1;
+        char buffer[buffer_size];
+        char* ptr = std::to_chars(buffer, buffer + buffer_size, value, base).ptr;
+        for (auto* p = buffer; p != ptr; ++p) {
+            *cur_++ = static_cast<CharT>(*p);
+        }
+    }
+
+    constexpr void append_numeric_with_char_buffer(float value)
+    {
+        constexpr auto buffer_size = 50;
+        char buffer[buffer_size];
+        char* ptr = std::to_chars(buffer, buffer + buffer_size, value).ptr;
+        for (auto* p = buffer; p != ptr; ++p) {
+            *cur_++ = static_cast<CharT>(*p);
+        }
+    }
+
+    constexpr void append_numeric_with_char_buffer(double value)
+    {
+        constexpr auto buffer_size = 330;
+        char buffer[buffer_size];
+        char* ptr = std::to_chars(buffer, buffer + buffer_size, value).ptr;
+        for (auto* p = buffer; p != ptr; ++p) {
+            *cur_++ = static_cast<CharT>(*p);
+        }
+    }
+
+    CharT* buffer_;
+    CharT* cur_;
+    CharT* end_;
+    [[no_unique_address]] Allocator alloc_;
+};
+
+#define RBOX_STRING_BUILDER_ALIAS(string_type, CharT)          \
+    using string_type##_builder = basic_string_builder<CharT>; \
+    using pmr_##string_type##_builder =                        \
+        basic_string_builder<CharT, std::pmr::polymorphic_allocator<CharT>>;
+
+RBOX_STRING_BUILDER_ALIAS(string, char)
+RBOX_STRING_BUILDER_ALIAS(u8string, char8_t)
+RBOX_STRING_BUILDER_ALIAS(u16string, char16_t)
+RBOX_STRING_BUILDER_ALIAS(u32string, char32_t)
+RBOX_STRING_BUILDER_ALIAS(wstring, wchar_t)
+
+#undef RBOX_STRING_BUILDER_ALIAS
+}  // namespace rbox
+
+#endif  // RBOX_UTILS_STRING_BUILDER_HPP
