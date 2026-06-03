@@ -67,7 +67,7 @@ enum class foo : int {  // | original | by_value | by_name | enum_unique_index |
 using enum rbox::enum_entry_order;
 
 static_assert(rbox::enum_index_by<by_value>(foo::three) == 4);
-static_assert(rbox::enum_index_by_opt<by_name>(foo::four) == 1);
+static_assert(rbox::enum_index_opt_by<by_name>(foo::four) == 1);
 
 constexpr auto foo_null = static_cast<foo>(0);
 static_assert(rbox::enum_index(foo_null) == rbox::npos);  // which is static_cast<size_t>(-1)

@@ -134,6 +134,17 @@ Its status semantics are:
 
 > ⚠️ **BE CAREFUL with platform-dependent types** like `int`, `wchar_t`, `wint_t`, etc.
 
+Example:
+
+```cpp
+// UTF-8 to UTF-16 conversion
+char8_t input[] = u8"Hello 😀";
+char16_t output[16] = {};
+auto result = rbox::utf8_to_utf16(output, output + 16, input, std::end(input));
+// result.status == encoding_status::done
+// result.out_ptr - output == 8 (6 BMP + 2 surrogates... depends on encoding)
+```
+
 The dedicated converters further restrict source and destination size bytes by encoding direction:
 
 - `utf8_to_utf16`: output type size 2, input type size 1

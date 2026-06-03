@@ -2,30 +2,39 @@
 
 ## Introduction
 
-**rbox** is a header-only C++26 library that leverages the new Reflection facilities ([P2996](https://wg21.link/p2996)) to provide compile-time utilities for C++ development. It aims to eliminate boilerplate code for common scenarios — all driven by compile-time reflection.
+**rbox** is a header-only library that leverages the C++26 Reflection facilities ([P2996](https://wg21.link/p2996)) to provide compile-time utilities for C++ development. It aims to eliminate boilerplate code for common scenarios: enum to/from string, constant dispatch table, serialization and debug dump, etc. — all of which are driven by compile-time reflection.
 
 Key features:
 
-- **Enum operations** — string-to-enum and enum-to-string conversion (including enum flags), `std::format` support, bitwise/comparison operators, etc.
-- **Compile-time fixed map** — Auto-selected optimal data structures (hash table, binary search, dense array, etc.) for integral, enum, or string keys.
-- **Member lookup table** — Pattern-based lookup of class/namespace members, generating dispatch tables with auto-selected optimal underlying data structure.
-- **Serialization** — JSON serialization and debug-friendly dump format, with `constexpr` support and full UTF encoding support.
+- **Compile-time fixed map** — Builds a constant key-value lookup table at compile time with **zero boilerplate code** and **competitive performance**. `rbox` picks the optimal underlying data structure adaptively according to your input data — dense array, binary search, or hash table.
+
+- **Member dispatch table** — Built on top of the fixed map. Collects class or namespace members whose identifiers match a given wildcard pattern (e.g., `"visit_*"`, `"get_*_of"`) and builds a dispatch table whose values are pointers (or member pointers) to the matched members. `rbox` provides a clean and effective alternative for dispatching idiom, compared to traditional if-else chains or X-macros.
+
+- **Enum operations** — Converts enums to/from strings or integers (including enum flag types), with `std::format` support, bitwise/comparison operator macros, and compile-time metadata accessors. **Signedness-safe integer comparison** is supported.
+
+- **Serialization** — Serializes a `struct` to JSON with one function call, recursing into nested objects, arrays, tuples, and variants. Additionally, `dump_to_json_like` produces more readable debug output. Both components are fully `constexpr`-compatible with UTF support.
 
 Auxiliary features:
 
-- **Type traits**: Class type flattening, type classification, etc.
-- **Utility**: Encoding, string builder, structural container types, etc.
+- **Type traits**: Provides a mechanism to "flatten" a class type — get a full list of data members, including those inherited from direct or indirect bases. Many other useful components for type classification, invocability testing, etc. are included.
+
+- **Utility**: A collection of frequently used components, including:
+  - **Recursive data promotion to static storage** — `to_static_storage()` recursively converts nested ranges, tuples, and variants into structural types, going beyond what `std::define_static_array()` and `std::define_static_string()` offer;
+  - **`constexpr` UTF conversion** — Converts strings between UTF-8, UTF-16, and UTF-32 encodings;
+  - **`constexpr` string builder** — Builds strings with an exponentially growing buffer;
+  - **`constexpr` identifier style converter** — Converts between snake_case, CamelCase, Http-Header-Case, and more;
+  - Structural container types (`meta_span`, `meta_variant`, etc.) that complement the standard library.
 
 Detailed documentation for each component is available in the [`docs/`](docs/) directory:
 
-| Component       | Document                                     |
-| --------------- | -------------------------------------------- |
-| Enum operations | [`docs/enum.md`](docs/enum.md)               |
-| Fixed map       | [`docs/fixed_map.md`](docs/fixed_map.md)     |
-| Lookup table    | [`docs/lookup.md`](docs/lookup.md)           |
-| Serialization   | [`docs/serializer.md`](docs/serializer.md)   |
-| Type traits     | [`docs/type_traits.md`](docs/type_traits.md) |
-| Utilities       | [`docs/utils.md`](docs/utils.md)             |
+| Component       | Document                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------- |
+| Enum operations | [`docs/enum.md`](docs/enum.md)                                                                |
+| Fixed map       | [`docs/fixed_map.md`](docs/fixed_map.md)                                                      |
+| Dispatch table  | [`docs/lookup.md`](docs/lookup.md)                                                            |
+| Serialization   | [`docs/serializer.md`](docs/serializer.md)                                                    |
+| Type traits     | [`docs/type_traits.md`](docs/type_traits.md)                                                  |
+| Utilities       | [`docs/utils.md`](docs/utils.md) and [`docs/to_static_storage.md`](docs/to_static_storage.md) |
 
 ## Quick Start
 
@@ -77,7 +86,7 @@ int main() {
     // Integral-key map — Auto-selected as O(1) lookup:
     // if key < 1 or key > 6:
     //     return std::nullopt
-    //  return underlying_array[key - 1]
+    // return underlying_array[key - 1]
     constexpr auto entries = [] {
         return std::vector<std::pair<int, std::string>>{
             {1, "one"}, {2, "two"}, {3, "three"}, {4, "four"}, {5, "five"}, {6, "six"}};
@@ -103,7 +112,7 @@ int main() {
 }
 ```
 
-### Compile-time Member Lookup Table
+### Compile-time Member Dispatch Table
 
 #### Pattern Match
 
@@ -291,18 +300,18 @@ int main() {
     // {
     //   "name": "Alice",
     //   "age": 30,
-    //   "job": 0,
+    //   "job": 0
     // }
 
     // Debug-friendly dump (unquoted field names, single-quoted chars)
     std::println("{}", rbox::dump_to_json_like(p));
     // {name:"Alice",age:30,job:developer}
 
-    // Enum-to-string serialization
+    // Enum-to-string serialization (with char8_t output)
     constexpr auto opts = rbox::serialize_options{
         .enum_to_string = true,
     };
-    std::println("{}", rbox::serialize_to_json<char8_t, opts>(p));
+    auto u8json = rbox::serialize_to_json<char8_t, opts>(p);
     // u8string: {"name":"Alice","age":30,"job":"developer"}
 }
 ```
@@ -339,7 +348,7 @@ Greatest respect to every author of P2996 and [experimental Clang fork](https://
 
 Special thanks to author of [`magic_enum`](https://github.com/Neargye/magic_enum), the C++17 enum reflection library. API design of enum operations in `rbox` are inspired by `magic_enum` library.
 
-## Further Plan
+## Future Roadmap
 
 - `fixed_set`
 - Serialization

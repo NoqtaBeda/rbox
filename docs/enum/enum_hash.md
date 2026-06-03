@@ -6,7 +6,7 @@ Defined in header `<rbox/enum/enum_hash.hpp>`.
 namespace rbox {
 
 template <enum_type E>
-constexpr uint64_t enum_hash_v;
+constexpr size_t enum_hash_v;
 
 }  // namespace rbox
 ```

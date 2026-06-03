@@ -41,4 +41,24 @@ constexpr auto ascii_ci_enum_flags_contains =
 }  // namespace rbox
 ```
 
-Overloads in `enum_flags_contains<E>` are similar to those in `enum_flags_cast<E>` while only a presence check is performed (i.e., whether the input string or value is a disjunction of enum entries defined). If you do not need the casted enum value, `enum_flags_contains<E>` has better performance.
+- (1.1, 1.2) `enum_flags_contains<E>(str, delim)` checks whether the input string can be split by the given delimiter into a valid disjunction of defined enum entry names. Each segment in input `str` is trimmed before matching;
+- (2) `enum_flags_contains<E>(flags)` checks whether the given enum flag value is a valid disjunction of defined entries;
+- (3) `enum_flags_contains<E>(flags)` checks whether the given integer, interpreted as a flag value, is a valid disjunction of defined entries. Signedness-safe and narrowing-safe comparison is performed.
+
+Additionally, `ascii_ci_enum_flags_contains<E>(str, delim)` provides a case-insensitive variant. Compilation error will be raised if non-ASCII characters exist in enum entry definition.
+
+If you do not need the casted enum value, `enum_flags_contains<E>` has better performance than `enum_flags_cast<E>`.
+
+Example:
+
+```cpp
+enum class permissions {
+    read = 1,
+    write = 2,
+    execute = 4,
+};
+
+static_assert(rbox::enum_flags_contains<permissions>("read|write"));
+static_assert(rbox::enum_flags_contains<permissions>(3));  // read | write
+static_assert(!rbox::enum_flags_contains<permissions>(8));
+```

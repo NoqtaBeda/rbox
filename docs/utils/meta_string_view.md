@@ -11,7 +11,7 @@ A structural type is a type whose value can be used as a non-type template param
 > ⚠️ `meta_basic_string_view` is _intentionally trivial_. **BE CAREFUL with initialization**:
 > ```cpp
 > auto s1 = meta_string_view{};  // ✅️ Value initialization as {nullptr, 0}
-> meta_string_view s2;           // ⚠️ Trivial initialization: undetermined value!
+> meta_string_view s2;           // ⚠️ Default initialization: undetermined value!
 > ```
 
 ### Synopsis

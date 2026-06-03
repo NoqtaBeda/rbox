@@ -43,7 +43,7 @@ constexpr auto ascii_ci_enum_flags_cast = ascii_ci_enum_flags_cast_t<std::remove
 ```
 
 - (1.1, 1.2) `enum_flags_cast<E>(str, delim)` returns the enum flag value if input str can be decomposed as enum entry names split by given delimiter, or `std::nullopt` otherwise. Each segment in input `str` is trimmed before parsing such that leading and trailing ASCII space characters of the segment are removed;
-- (2) `enum_flags_cast<E>(value)` casts value to enum type `E` if it can be decomposed as disjunction of enum entries defined in `E`, or returns `std::nullopt` otherwise. Signedness-safe and narrowing-safe comparison is performed.
+- (2) `enum_flags_cast<E>(value)` casts value to enum type `E` if it can be decomposed into a disjunction of defined enum entries, or returns `std::nullopt` otherwise. Signedness-safe and narrowing-safe comparison is performed.
 
 Additionally, `ascii_ci_enum_flags_cast<E>(str, delim)` provides a case-insensitive variant where input segments are matched in an ASCII case-insensitive manner. Compilation error will be raised if duplicated names exist in enum definition.
 

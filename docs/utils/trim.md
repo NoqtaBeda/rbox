@@ -15,3 +15,11 @@ constexpr auto ascii_trim = ascii_trim_t{};
 ```
 
 `ascii_trim(str)` removes leading and trailing ASCII whitespace characters (`' '`, `'\f'`, `'\n'`, `'\r'`, `'\t'`, `'\v'`). Returns a `std::basic_string_view`.
+
+Example:
+
+```cpp
+static_assert(rbox::ascii_trim("  hello  ") == "hello");
+static_assert(rbox::ascii_trim("\n\t world \r\n") == "world");
+static_assert(rbox::ascii_trim("no_whitespace") == "no_whitespace");
+```

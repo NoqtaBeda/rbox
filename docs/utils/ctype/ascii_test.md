@@ -21,3 +21,13 @@ constexpr auto is_ascii_string = is_ascii_string_t{};
 
 - `is_ascii_char(c)`: Returns `true` if `c` is in range `[0, 127]`.
 - `is_ascii_string(str)`: Returns `true` if all characters in `str` are in range `[0, 127]`.
+
+Example:
+
+```cpp
+static_assert(rbox::is_ascii_char('a'));
+static_assert(!rbox::is_ascii_char(L'\x80'));
+
+static_assert(rbox::is_ascii_string("hello"));
+static_assert(!rbox::is_ascii_string("caf\xC3\xA9"));  // UTF-8 encoded 'é'
+```

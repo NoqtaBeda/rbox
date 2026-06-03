@@ -88,9 +88,9 @@ private:
 // }
 static_assert(rbox::partially_flattenable_class<qux_t>);
 // Not flattenable (due to existence of private non-static data members)
-static_assert(NOT rbox::flattenable_class<qux_t>);
+static_assert(!rbox::flattenable_class<qux_t>);
 // Not flattenable aggregate (stronger constraints than flattenable concept)
-static_assert(NOT rbox::flattenable_aggregate_class<qux_t>);
+static_assert(!rbox::flattenable_aggregate_class<qux_t>);
 
 // Hint: partially_flattenable has loose constraints that most class types in practice can satisfy.
 // A class type can be partially flattenable even if there's nothing public to be flattened.
@@ -131,7 +131,7 @@ constexpr meta_span<flattened_data_member_info> public_flattened_nonstatic_data_
 
 The struct `flattened_data_member_info` holds information about a non-static data member of class type `T`, which may be inherited from base classes of `T`. It contains the following members:
 
-- `member` - Reflection to a non-static data member of `T`, either defined by `T` directly or inherited from some base class;
+- `info` - Reflection to a non-static data member of `T`, either defined by `T` directly or inherited from some base class;
 - `actual_offset` - Offset of the member relative to `T`;
 - `type()` - Returns the reflection to the member's type;
 - `direct_parent()` - Returns the reflection to the class that the member is directly defined in;

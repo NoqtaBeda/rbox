@@ -3,7 +3,6 @@
 Defined in header `<rbox/enum/enum_format.hpp>`.
 
 ```cpp
-namespace rbox {
 
 // std::format support
 template <rbox::enum_type E>
@@ -14,8 +13,6 @@ struct std::formatter<E>;
 template <rbox::enum_type E>
 struct fmt::formatter<E>;
 #endif
-
-}  // namespace rbox
 ```
 
 rbox provides formatting support for both `std::format` and `fmt::format`. Include this header to enable enum formatting.
@@ -23,7 +20,7 @@ rbox provides formatting support for both `std::format` and `fmt::format`. Inclu
 - For enum non-flag values, no format specifier is needed;
 - For enum flag values, the format specifier should start with character `'f'` or `'F'`, then optionally follows the delimiter string.
 
-`enum_name` and `enum_flags_name` are used respectively. Undefined enum values (or enum flag values not decomposable to disjunction of enum entries defined) will be output by pattern `(%1)%2`, where `%1` is the type name and `%2` is the underlying value.
+`enum_name` and `enum_flags_name` are used respectively. Undefined enum values (or enum flag values that cannot be decomposed into a disjunction of defined enum entries) will be output by pattern `(%1)%2`, where `%1` is the type name and `%2` is the underlying value.
 
 Example:
 

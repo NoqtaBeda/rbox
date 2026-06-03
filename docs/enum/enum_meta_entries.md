@@ -25,11 +25,11 @@ enum class foo {
 };
 
 using enum enum_entry_order;
-// The following line is example of enum_meta_entries_v
-template for (constexpr auto order : rbox::enum_meta_entries_v<rbox::enum_entry_order>)
+
+template for (constexpr std::meta::info order : rbox::enum_meta_entries_v<rbox::enum_entry_order>)
 {
     std::print("{}:", identifier_of(order));
-    for (auto value : rbox::enum_values_v<foo, order>) {  // Example of enum_values_v
+    for (auto value : rbox::enum_values_v<foo, [:order:]>) {  // Example of enum_values_v
         std::print(" {}", std::to_underlying(value));
     }
     std::print("; ");

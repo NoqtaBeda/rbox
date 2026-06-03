@@ -1,6 +1,6 @@
 ## Introduction
 
-rbox contains a series of utility components for various usages. They are initially designed for internal usage of rbox library, yet part of them are ready to be exposed as public API.
+rbox contains a series of utility components for various usages. They were initially designed for internal use within the rbox library, yet they are now ready to be exposed as a public API.
 
 > ⚠️ **NOT RECOMMENDED to use components outside this document**. rbox provides no guarantee of API stability of those components if they are not listed in this document.
 
@@ -20,7 +20,7 @@ rbox contains a series of utility components for various usages. They are initia
 
 ### String & Encoding
 
-* [bkdr_hash](utils/string_hash.md): String hash with BKDR algorithm
+* [bkdr_hash](utils/string_hash/bkdr_hash.md): String hash with BKDR algorithm
 * [ctype](utils/ctype.md): ASCII character predicates & case conversion helpers
 * [format](utils/format.md): `std::format` and `fmt::format` support for `meta_basic_string_view`
 * [identifier_naming](utils/identifier_naming.md): Identifier name conversion

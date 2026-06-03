@@ -32,3 +32,11 @@ These helpers are used for recovery after a decoding failure. They inspect the i
 - `consume_utf_invalid_sequence`: dispatches by `sizeof(CharT)`.
 
 These helpers are intended for replacement-based recovery, where the whole consumed invalid slice is typically replaced by a single `replacement_code_point` (common practice according to Unicode 11 standard).
+
+Example:
+
+```cpp
+char8_t bad_utf8[] = {u8'a', char8_t(0xFF), u8'b'};  // 0xFF is invalid UTF-8
+auto next = rbox::consume_utf8_invalid_sequence(bad_utf8 + 1, bad_utf8 + 3);
+// next == bad_utf8 + 2 (consumed 1 invalid byte, resuming at 'b')
+```

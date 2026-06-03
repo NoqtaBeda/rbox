@@ -33,3 +33,14 @@ constexpr auto ascii_toupper = ascii_toupper_t{};
 - `ascii_toupper(str)`: Returns a new string with all ASCII letters converted to uppercase.
 
 For non-ASCII characters, the functions above always return the character unchanged.
+
+Example:
+
+```cpp
+static_assert(rbox::ascii_tolower('A') == 'a');
+static_assert(rbox::ascii_toupper('z') == 'Z');
+static_assert(rbox::ascii_tolower('1') == '1');  // unchanged
+
+auto s = rbox::ascii_tolower("Hello World");  // "hello world"
+auto t = rbox::ascii_toupper("Hello World");  // "HELLO WORLD"
+```

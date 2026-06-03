@@ -45,8 +45,6 @@ The type aliases `add_cv_like_t`, `add_cvref_like_t` and `propagate_cv_like_t` a
 Example (see [unit test](../../tests/type_traits/test_cvref.cpp) for more examples):
 
 ```cpp
-
-
 // Adds const-qualifier to T = int*
 static_assert(std::is_same_v<
               rbox::add_cv_like_t<int*, const double&>,

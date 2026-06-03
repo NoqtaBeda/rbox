@@ -29,7 +29,7 @@ enum class foo {
 using enum enum_entry_order;
 template for (constexpr auto order : {original, by_value, by_name})
 {
-    for (auto [value, name] : rbox::enum_entries_v<foo>) {
+    for (auto [value, name] : rbox::enum_entries_v<foo, order>) {
         std::println("{:>5s}: {}", name, std::to_underlying(value));
     }
 }

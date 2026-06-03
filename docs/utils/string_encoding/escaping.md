@@ -79,7 +79,7 @@ So `{status, next_dest}` means "the escape attempt finished with status `status`
 `escaping_status` is one of the following:
 
 - `done`: an escaped form was written;
-- `no_escape`: `c` does not need escaping in the selected mode;
+- `no_escape`: `c` does not need escaping in the selected mode; the character was written as-is to the output;
 - `error`: the destination buffer is too small.
 
 Escaping behavior:
@@ -89,3 +89,12 @@ Escaping behavior:
 | `escaping_mode::json`           | Escapes `"`, `\\`, `/`, `\b`, `\f`, `\n`, `\r`, `\t`, and other ASCII control characters as `\u00XX`.             |
 | `escaping_mode::display_char`   | Escapes `\\`, `\0`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v`, and other non-printable ASCII bytes as `\xHH`.      |
 | `escaping_mode::display_string` | Escapes `"`, `\0`, `\\`, `\a`, `\b`, `\f`, `\n`, `\r`, `\t`, `\v`, and other non-printable ASCII bytes as `\xHH`. |
+
+Example:
+
+```cpp
+char buf[16] = {};
+auto [status, next] = rbox::write_escaped_character_for_json(buf, buf + 16, '"');
+// status == escaping_status::done, wrote '\\', '"'
+// next == buf + 2
+```

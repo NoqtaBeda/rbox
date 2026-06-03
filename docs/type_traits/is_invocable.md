@@ -99,3 +99,26 @@ Each concept `name` is equivalent to the corresponding variable template `is_nam
 | `invocable_n<F, Arg, N>`<br/>`nothrow_invocable_n<F, Arg, N>`                           | `is_invocable_n_v<F, Arg, N>`<br/>`is_nothrow_invocable_n_v<F, Arg, N>`                           |
 | `invocable_r_n<F, R, Arg, N>`<br/>`nothrow_invocable_r_n<F, R, Arg, N>`                 | `is_invocable_r_n_v<R, F, Arg, N>`<br/>`is_nothrow_invocable_r_n_v<R, F, Arg, N>`                 |
 | `invocable_exactly_r_n<F, R, Arg, N>`<br/>`nothrow_invocable_exactly_r_n<F, R, Arg, N>` | `is_invocable_exactly_r_n_v<R, F, Arg, N>`<br/>`is_nothrow_invocable_exactly_r_n_v<R, F, Arg, N>` |
+
+Example:
+
+```cpp
+auto add = [](int a, int b) noexcept -> int { return a + b; };
+auto mul = [](int a, int b) -> long { return static_cast<long>(a) * b; };
+
+// Exact return type matching
+static_assert(rbox::invocable_exactly_r<decltype(add), int, int, int>);
+static_assert(rbox::nothrow_invocable_exactly_r<decltype(add), int, int, int>);
+// mul returns long, not int — invocable_r passes (convertible), invocable_exactly_r fails
+static_assert(rbox::invocable_r<decltype(mul), int, int, int>);
+static_assert(!rbox::invocable_exactly_r<decltype(mul), int, int, int>);
+
+// Repetitive argument invocation
+static_assert(rbox::invocable_n<decltype(add), int, 2>);
+static_assert(rbox::nothrow_invocable_n<decltype(add), int, 2>);
+static_assert(rbox::invocable_exactly_r_n<decltype(add), int, int, 2>);
+
+static_assert(rbox::invocable_r_n<decltype(mul), int, int, 2>);
+// Return type mismatch: long vs. int
+static_assert(!rbox::invocable_exactly_r_n<decltype(mul), int, int, 2>);
+```

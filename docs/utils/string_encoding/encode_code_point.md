@@ -56,3 +56,12 @@ The possible status values are:
 - `encoding_status::done`: the code point was written successfully;
 - `encoding_status::invalid_character`: the input code point is not a valid Unicode scalar value;
 - `encoding_status::buffer_run_out`: the destination range is too small.
+
+Example:
+
+```cpp
+char8_t buf[8] = {};
+auto [next, status] = rbox::encode_code_point_to_utf8(buf, buf + 8, 0x20AC);
+// status == encoding_status::done
+// next == buf + 3 (0xE2 0x82 0xAC)
+```

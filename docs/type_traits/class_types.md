@@ -37,3 +37,26 @@ The concept `class_without_non_public_nonstatic_data_members` tests whether `std
 The concept `class_without_virtual_inheritance` checks whether `std::remove_cv_t<T>` is a non-union class without virtual base classes (either directly or indirectly).
 
 - Always evaluates to `false` for non-class types: scalar types, references, arrays, unions, etc.
+
+Example:
+
+```cpp
+struct A { int x; };
+struct B : A { double y; };
+struct C : A, B {};  // Ambiguous: A appears twice
+
+struct D { int x; virtual void f() {} };
+struct E : virtual D {};
+
+class F { int private_x; };
+
+static_assert(rbox::class_without_ambiguous_inheritance<A>);
+static_assert(rbox::class_without_ambiguous_inheritance<B>);
+static_assert(!rbox::class_without_ambiguous_inheritance<C>);
+
+static_assert(rbox::class_without_virtual_inheritance<A>);
+static_assert(!rbox::class_without_virtual_inheritance<E>);
+
+static_assert(rbox::class_without_non_public_nonstatic_data_members<A>);
+static_assert(!rbox::class_without_non_public_nonstatic_data_members<F>);
+```

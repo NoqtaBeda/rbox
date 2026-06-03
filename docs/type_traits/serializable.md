@@ -11,7 +11,7 @@ concept serializable = /* ... */;
 }  // namespace rbox
 ```
 
-These concepts test whether types can be serialized (converted to/from a portable format).
+This concept tests whether a type can be serialized (converted to/from a portable format).
 
 The concept `serializable<T>` tests whether `std::remove_cv_t<T>` can be serialized in a memberwise manner _recursively_. A type is memberwise serializable if it satisfies one of the following:
 

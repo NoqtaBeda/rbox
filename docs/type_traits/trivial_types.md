@@ -17,4 +17,4 @@ concept trivial_type =
 }  // namespace rbox
 ```
 
-The concept `trivial_type` tests whether `T` is a fully trivial type — all six special member functions (default constructor, destructor, copy/move constructors, copy/move assignment operators) are trivial. This is a stricter constraint than `std::is_trivial_v<T>`, which also requires the type to have a trivial default constructor and be trivially copyable.
+The concept `trivial_type` is an alternative to the deprecated `std::is_trivial_v`.

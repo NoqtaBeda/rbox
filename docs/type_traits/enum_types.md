@@ -23,7 +23,7 @@ concept enum_flag_type;
 }  // namespace rbox
 ```
 
-The concepts `enum_type` and `scoped_enum_type` test whether the given type `T` is any enum type, or scoped enum type (`enum class`).
+The concepts `enum_type` and `scoped_enum_type` (imported from `<rbox/utils/concepts.hpp>`) test whether the given type `T` is any enum type, or scoped enum type (`enum class`).
 
 The concept `enum_flag_type` tests whether the given type `T` is an enum flag type. rbox identifies an enum type `T` as `enum_flag_type` only if `T` satisfies one of the following:
 
@@ -41,7 +41,7 @@ enum class permissions_t : uint8_t {
 
 // (1) Specialize rbox::is_enum_flag_v
 template <>
-constexpr bool rbox::is_enum_flag_v<permissions_t>;
+constexpr auto rbox::is_enum_flag_v<permissions_t> = true;
 
 // (2) Annotate via macro RBOX_AS_ENUM_FLAG
 enum RBOX_AS_ENUM_FLAG format_t {
@@ -54,3 +54,5 @@ enum RBOX_AS_ENUM_FLAG format_t {
 static_assert(rbox::enum_flag_type<const permissions_t>);
 static_assert(rbox::enum_flag_type<format_t>);
 ```
+
+> **Note:** The `enum_type` and `scoped_enum_type` concepts are defined in `<rbox/utils/concepts.hpp>` and re-exported by this header.

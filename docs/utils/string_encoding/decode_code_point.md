@@ -47,3 +47,12 @@ All decoders return `{code_point, next}` whose type is `std::pair<char32_t, cons
   - on failure, it is exactly the original `input` pointer passed to the function.
 
 So `{code_point, next}` means "one scalar value was decoded and the input cursor advanced to `next`", while `{invalid_code_point, next = input}` means "decoding failed and no input was consumed".
+
+Example:
+
+```cpp
+char8_t utf8[] = u8"€";  // 3-byte UTF-8: 0xE2 0x82 0xAC
+auto [cp, next] = rbox::decode_code_point_from_utf8(utf8, utf8 + 3);
+// cp == 0x20AC (U+20AC EURO SIGN)
+// next == utf8 + 3
+```

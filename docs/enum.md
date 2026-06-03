@@ -3,7 +3,7 @@
 `rbox` provides common functionality for enum types, including but not limited to:
 
 - enum metadata: `enum_entries`, `enum_names`, `enum_values`, `enum_type_name`, etc.;
-- conversion between enum value and string: `enum_name`, `enum_cast`, etc.;
+- conversion between enum values and strings: `enum_name`, `enum_cast`, etc.;
 - enum flag value decomposition and string parsing: `enum_flags_name`, `enum_flags_cast`, etc.;
 - `std::format` and `fmt::format` support;
 - operator overloading support (including bitwise and comparison operators).
@@ -33,7 +33,7 @@ Part of the API design resembles [magic_enum](https://github.com/Neargye/magic_e
 
 * [enum_flags_name](enum/enum_flags_name.md): Converts an enum flag value to its string representation.
 * [enum_flags_cast](enum/enum_flags_cast.md): Converts a flag string or integer to an enum flag value; case-insensitive variant provided.
-* [enum_flags_contains](enum/enum_flags_contains.md): Checks whether a flag string or value can be decomposed as disjunction of enum entries.
+* [enum_flags_contains](enum/enum_flags_contains.md): Checks whether a flag string or value can be decomposed into a disjunction of defined enum entries.
 
 ### Switch-Case & Formatting
 

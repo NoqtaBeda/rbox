@@ -145,3 +145,17 @@ concept output_range_of_exactly =
 ```
 
 The `*_of` and `*_of_exactly` concepts are convenient shortcuts for constraining both the range category and its value type in a single concept.
+
+Example:
+
+```cpp
+static_assert(rbox::range_of<std::vector<int>, int>);
+static_assert(rbox::range_of_exactly<std::vector<int>, int>);
+static_assert(!rbox::range_of_exactly<std::vector<int>, double>);
+
+static_assert(rbox::contiguous_range_of<std::vector<int>, int>);
+static_assert(rbox::sized_range_of<std::array<int, 4>, int>);
+static_assert(rbox::view_of<std::string_view, char>);
+
+static_assert(rbox::non_range<int>);
+```

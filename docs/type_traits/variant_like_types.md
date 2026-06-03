@@ -21,3 +21,11 @@ This includes but is not limited to:
 - Custom variant-like types that satisfy the variant interface.
 
 See [unit test](../../tests/type_traits/test_variant_like_types.cpp) for examples and details.
+
+Example:
+
+```cpp
+static_assert(rbox::variant_like<std::variant<int, double>>);
+static_assert(rbox::variant_like<rbox::meta_variant<int, double>>);
+static_assert(!rbox::variant_like<std::optional<int>>);
+```

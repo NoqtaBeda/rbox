@@ -22,6 +22,8 @@ struct serialize_options {
     bool enum_to_string = false;         // Serialize enum as string ("red") or integer (0)
     bool halts_on_invalid_enum = false;  // Halt if enum has no name (requires enum_to_string)
     bool halts_on_non_finite_floating_point = false;  // Halt on NaN/Inf (else serializes as string)
+
+    constexpr bool never_halts() const;  // Returns true if no halt option is enabled
 };
 
 }  // namespace rbox
@@ -85,12 +87,11 @@ The function serializes the following types according to the `serializable` conc
 | String-like types                                           | `"hello"`                                    | Escape special characters                                         |
 | `std::map<K, V>` where `K` is string-like                   | `{"key": value, ...}`                        | JSON object                                                       |
 | Other range types                                           | `[1, 2, 3]`                                  | JSON array                                                        |
+| `std::set`, `std::multimap`, `std::map` (non-string key)    | `[[key, value], ...]`                        | Serialized as array of `[key, value]` pairs                       |
 | Tuple-like types                                            | `[elem1, elem2, ...]`                        | JSON array                                                        |
 | `std::optional<T>`                                          | `42` or `null`                               | Value or null if empty                                            |
 | `std::variant<Ts...>`                                       | `value`                                      | Serializes current alternative                                    |
 | Flattenable class types                                     | `{"field1": value1, ...}`                    | JSON object                                                       |
-
-**Note:** `std::set`, `std::multimap`, and `std::map<K, V>` where `K` is not string-like are serialized as arrays of `[key, value]` pairs.
 
 #### Floating-Point Serialization
 
@@ -133,7 +134,7 @@ When `halts_on_invalid_enum = true`, integer serialization checks `enum_contains
 | Regular enum | `"red"`         | `null`                | returns `false` / `std::nullopt` |
 | Enum flag    | `"read\|write"` | `null`                | returns `false` / `std::nullopt` |
 
-An enum type is handled as enum flag if it satisfies `enum_flag_type` concept (see section "Enum Types & Enum Flag Types" of the [`serializable` concept](./type_traits.md#serializable-types) for details). For enum flags, validity means the value can be decomposed as a disjunction of defined flag entries (e.g., `read | write = 3`). Values that cannot be decomposed (e.g., `8` when only `1, 2, 4` are defined) are treated as invalid — producing `null` (JSON null literal) when `halts = false` or halting when `halts = true`.
+An enum type is handled as enum flag if it satisfies the `enum_flag_type` concept (see [Enum Types & Enum Flag Types](./type_traits/enum_types.md) for details). For enum flags, validity means the value can be decomposed as a disjunction of defined flag entries (e.g., `read | write = 3`). Values that cannot be decomposed (e.g., `8` when only `1, 2, 4` are defined) are treated as invalid — producing `null` (JSON null literal) when `halts = false` or halting when `halts = true`.
 
 For the empty flag set (`0`), it is always treated as valid and serializes to `""` (empty string).
 
@@ -142,8 +143,6 @@ Enumeration names containing non-ASCII characters (e.g., Chinese, Japanese, emoj
 #### Examples
 
 ```cpp
-
-
 // Basic types
 auto i = rbox::serialize_to_json(42);                    // "42"
 auto f = rbox::serialize_to_json(3.14);                  // "3.14"

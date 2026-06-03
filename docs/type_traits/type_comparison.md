@@ -97,3 +97,17 @@ These concepts provide convertibility checks with various levels of cv-qualifier
 | `convertible_to_none_of_without_cv<T, Args...>`    | Not convertible to any, ignoring cv                      |
 | `convertible_to_one_of_without_cvref<T, Args...>`  | Convertible to one of, ignoring cvref on `T` and targets |
 | `convertible_to_none_of_without_cvref<T, Args...>` | Not convertible to any, ignoring cvref                   |
+
+Example:
+
+```cpp
+static_assert(rbox::same_as<int, int>);
+static_assert(!rbox::same_as<int, const int>);
+static_assert(rbox::same_as_without_cv<int, const int>);
+
+static_assert(rbox::same_as_one_of<int, double, float, int>);
+static_assert(rbox::same_as_none_of<int, double, float, char>);
+
+static_assert(rbox::convertible_to_one_of<int, long, double>);
+static_assert(!rbox::convertible_to_one_of<int*, long, double>);
+```

@@ -32,3 +32,15 @@ constexpr bool is_operator_3way_comparable_v = /* ... */;
 ```
 
 These variable templates detect whether `const T&` and `const U&` support the corresponding operator (e.g., `==`, `!=`, `<`, `>`, `<=`, `>=`, `<=>`) and the result is convertible to `bool` (or a three-way comparison result type for `<=>`).
+
+Example:
+
+```cpp
+static_assert(rbox::is_operator_eq_comparable_v<int, int>);
+static_assert(rbox::is_operator_lt_comparable_v<int, int>);
+static_assert(rbox::is_operator_3way_comparable_v<int, int>);
+static_assert(!rbox::is_operator_eq_comparable_v<int, std::string>);
+
+static_assert(rbox::three_way_comparison_result<std::strong_ordering>);
+static_assert(!rbox::three_way_comparison_result<int>);
+```

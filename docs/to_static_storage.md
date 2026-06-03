@@ -44,6 +44,8 @@ A type `T` satisfies the concept `promotable_to_static_storage` if and only if `
 5. **Functions**: If `T` is a function type, the result is `std::add_pointer_t<T>` (i.e., a function pointer type).
 6. **Other types**: For any other type `T`, if `T` is a structural type, the result is `T` (identity conversion). Otherwise, a compile error occurs.
 
+> Structural types include scalar types (arithmetic types, enums, pointers), arrays of structural types, and class types with all public non-static data members of structural types. See [cppreference](https://en.cppreference.com/w/cpp/language/template_parameters) for the formal definition.
+
 The type alias `to_static_storage_result_t<T>` obtains the result type of `to_static_storage` for a given input type `T`.
 
 ## Example
@@ -76,6 +78,17 @@ struct point_t {
 };
 constexpr auto val = rbox::to_static_storage(point_t{.x = 12, .y = 34});
 static_assert(std::is_same_v<decltype(val), const point_t>);
+
+// (5) Function to function pointer
+using F = void(int, double);
+static_assert(std::is_same_v<
+    rbox::to_static_storage_result_t<F>,
+    void (*)(int, double)>);
+
+// (6) Using to_static_storage_result_t
+static_assert(std::is_same_v<
+    rbox::to_static_storage_result_t<std::vector<int>>,
+    rbox::meta_span<int>>);
 ```
 
 See [unit test](../tests/test_to_static_storage.cpp) for more examples and details.

@@ -1,6 +1,6 @@
 ## `meta_triple`
 
-Defined in header `<rbox/utils/meta_pair.hpp>`.
+Defined in header `<rbox/utils/meta_triple.hpp>`.
 
 `meta_triple<T, U, V>` is a structural alternative to `std::tuple<T, U, V>` for exactly three elements. A structural type is a type whose value can be used as a non-type template parameter (see [cppreference](https://en.cppreference.com/w/cpp/language/template_parameters) for details).
 

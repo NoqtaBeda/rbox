@@ -26,7 +26,7 @@ constexpr auto enum_name_opt = enum_name_opt_t{};
 - (1) `enum_name(e)` gets the name of given enum value `e`, or `std::string_view{}` if no such value is defined in the enum type.
 - (2) `enum_name_opt(e)` gets the name of given enum value, or `std::nullopt` if no such value is defined in the enum type. This version is helpful with monadic operations of `std::optional` since C++23.
 
-If multiple enum entries have the same value as `e`, name of the first one by definition order is returned.
+If multiple enum entries have the same value as `e`, the name of the first one by definition order is returned.
 
 Example:
 

@@ -29,3 +29,11 @@ return result
 Works with all character types. Provides two overloads:
 1. Pointer range `[begin, end)`
 2. Any string-like type (including C-style null-terminated strings)
+
+Example:
+
+```cpp
+constexpr auto h1 = rbox::bkdr_hash("hello");       // hashes null-terminated string
+constexpr auto h2 = rbox::bkdr_hash(std::string{"hello"});  // hashes std::string
+static_assert(h1 == h2);  // same input → same hash
+```

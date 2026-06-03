@@ -48,8 +48,19 @@ These predicates match the behavior of their `std::` counterparts for ASCII char
 | `ascii_isdigit`  | Decimal digit (`[0-9]`)                      |
 | `ascii_isxdigit` | Hexadecimal digit (`[0-9A-Fa-f]`)            |
 | `ascii_isblank`  | Blank character (space or tab)               |
-| `ascii_iscntrl`  | Control character (`[0-31, 127]`)            |
+| `ascii_iscntrl`  | Control character (codes 0-31 and 127)       |
 | `ascii_isgraph`  | Graphical character (printable except space) |
 | `ascii_isspace`  | Whitespace character (`[ \f\n\r\t\v]`)       |
 | `ascii_isprint`  | Printable character (`[32-126]`)             |
 | `ascii_ispunct`  | Punctuation character                        |
+
+Example:
+
+```cpp
+static_assert(rbox::ascii_isalpha('A'));
+static_assert(rbox::ascii_isdigit('7'));
+static_assert(rbox::ascii_isspace(' '));
+static_assert(rbox::ascii_iscntrl('\n'));
+static_assert(!rbox::ascii_isalpha('3'));
+static_assert(!rbox::ascii_isprint(L'\x80'));  // non-ASCII
+```

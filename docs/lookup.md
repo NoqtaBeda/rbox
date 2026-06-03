@@ -157,7 +157,7 @@ The public interface is a set of macros. Each macro wraps a `make_*_fixed_map()`
 **Notes**:
 
 - Class non-static data members only have public API due to a GCC 16.1 reflection limitation (confirmed to be a GCC bug. See [demo code](./code/meta_bug_1.cpp) for details).
-- `RBOX_CURRENT_CONTEXT` is equivalent to `std::meta::access_context::current()`.
+- The default access context is `RBOX_CURRENT_CONTEXT` (see [Access Contexts](./utils/meta_utility.md#access-contexts)), which is equivalent to `std::meta::access_context::current()`.
 
 ### Rules of Member Traversal
 
@@ -193,6 +193,7 @@ All lookup functions share these constraints:
 - **Template members are excluded.** No template instantiation will be performed.
 - Members must be accessible under the given `std::meta::access_context`.
 - Duplicated keys are not allowed (inherited from the [underlying fixed map](./fixed_map.md#components)).
+- The generated lookup table inherits the same `operator[]`, `find()`, and `size()` interface as the [underlying fixed map](./fixed_map.md#components), including the default-value fallback for missing keys.
 
 ### Overload Groups
 
@@ -254,16 +255,14 @@ Examples:
 - `"value_*"` matches `value_x`, `value_y`, `value_z` → keys `"x"`, `"y"`, `"z"`.
 - `"get_*_squared"` matches `get_x_squared`, `get_y_squared` → keys `"x"`, `"y"`.
 - `"*"` (empty prefix and suffix) tries to match every named member → key is the full identifier.
-- `"get_*"` does _not_ match `getter_x`.
+- `"get_*"` matches `get_x`, `get_y`, but does _not_ match `get` (no suffix after prefix) or `getter_x` (missing the literal `_` separator).
 
 ### meta_variant Values
 
 When matched members have heterogeneous pointer types, the value type becomes `meta_variant<Ptr1, Ptr2, ...>`. Access the value via `.visit()`:
 
 ```cpp
-
-
-constexpr auto table = STATIC_DATA_MEMBER_FIXED_MAP(MyClass, "s_*");
+constexpr auto table = RBOX_STATIC_DATA_MEMBER_FIXED_MAP(MyClass, "s_*");
 // value_type = meta_variant<const int*, double*>
 
 // Usage pattern #1:

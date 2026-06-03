@@ -1,6 +1,6 @@
 ## Type Traits
 
-rbox provides functionality for advanced type traits useful in common cases, some of which are unable to be implemented without compiler magic in the pre-C++26 era.
+rbox provides functionality for advanced type traits useful in common cases, some of which could not be implemented without compiler magic before C++26.
 
 ### Core Components
 

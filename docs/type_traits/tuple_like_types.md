@@ -30,3 +30,20 @@ The concept `pair_like` tests whether `T` is a (maybe cv-qualified) pair-like ty
 The concept `tuple_like_of` tests whether `T` is a (maybe cv-qualified) tuple-like type whose element types can be converted to `Args...` respectively. The element types are compared using `std::is_convertible_v`.
 
 The concept `tuple_like_of_exactly` tests whether `T` is a (maybe cv-qualified) tuple-like type whose element types are exactly `Args...` respectively. The element types are compared using `std::is_same_v`.
+
+Example:
+
+```cpp
+static_assert(rbox::tuple_like<std::tuple<int, double>>);
+static_assert(rbox::tuple_like<std::pair<int, double>>);
+static_assert(rbox::tuple_like<std::array<int, 4>>);
+
+static_assert(rbox::pair_like<std::pair<int, double>>);
+static_assert(!rbox::pair_like<std::tuple<int, double, float>>);
+
+static_assert(rbox::tuple_like_of<std::tuple<int, double>, int, double>);
+static_assert(rbox::tuple_like_of<std::tuple<int, double>, long, double>);
+
+static_assert(rbox::tuple_like_of_exactly<std::tuple<int, double>, int, double>);
+static_assert(!rbox::tuple_like_of_exactly<std::tuple<int, double>, long, double>);
+```

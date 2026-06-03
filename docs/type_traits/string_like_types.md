@@ -23,7 +23,7 @@ The concept `string_like` tests whether `T` is a (maybe cv-qualified) string-lik
 - C-style string pointer: `CharT*` and `const CharT*`;
 - `std::basic_string<CharT, Traits, Alloc>` for any `Traits` and `Alloc`;
 - `std::basic_string_view<CharT, Traits>` for any `Traits`;
-- `meta_basic_string_view<CharT>` (defined in `<rbox/utils/meta_string_view.hpp>`, a [structural](https://cppreference.com/w/cpp/language/template_parameters.html) replacement of `std::basic_string_view`);
+- `meta_basic_string_view<CharT>` (defined in `<rbox/utils/meta_string_view.hpp>`, a [structural](https://en.cppreference.com/w/cpp/language/template_parameters) replacement of `std::basic_string_view`);
 - Contiguous range of characters: `std::vector<CharT>`, `std::array<CharT, N>`, etc.
 
 The concept `string_like_of` tests whether `T` is a (maybe cv-qualified) string-like type whose character type is exactly `CharT`.
@@ -34,3 +34,17 @@ The type alias `char_type_t` extracts the character type of the string-like type
 - For C-style strings that decay to `CharT*` or `const CharT*`, `char_type_t` is `CharT`.
 
 See [unit test](../../tests/type_traits/test_string_like_types.cpp) for examples and details.
+
+Example:
+
+```cpp
+static_assert(rbox::string_like<std::string>);
+static_assert(rbox::string_like<const char*>);
+static_assert(rbox::string_like<std::string_view>);
+static_assert(rbox::string_like<std::vector<char>>);
+
+static_assert(rbox::string_like_of<std::wstring, wchar_t>);
+static_assert(!rbox::string_like_of<std::string, wchar_t>);
+
+static_assert(!rbox::string_like<int>);
+```

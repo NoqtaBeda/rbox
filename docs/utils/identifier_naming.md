@@ -27,18 +27,14 @@ constexpr auto non_alpha_as_upper = non_alpha_as_upper_tag_t{};
 constexpr bool is_valid_identifier(std::string_view identifier);
 
 // (2) Identifier conversion returning std::string
-//
-// Each to_*_case_t provides the same three operator() overloads:
-//   - operator()(std::string_view)            — default tag (non_alpha_as_lower)
-//   - operator()(non_alpha_as_lower_tag_t, std::string_view)
-//   - operator()(non_alpha_as_upper_tag_t, std::string_view)
-//
-// The example below uses to_snake_case_t as representative.
 struct to_snake_case_t {
+    // (2.1)
     static constexpr auto operator()(std::string_view identifier)
         -> std::string;
+    // (2.2)
     static constexpr auto operator()(non_alpha_as_lower_tag_t tag, std::string_view identifier)
         -> std::string;
+    // (2.3)
     static constexpr auto operator()(non_alpha_as_upper_tag_t tag, std::string_view identifier)
         -> std::string;
 };
@@ -153,8 +149,8 @@ For each valid identifier, conversion is done by the following steps:
 
 - `"exampleInput" -> ["example", "Input"]`;
 - `"ParseJSONDocument" -> ["Parse", "JSON", "Document"]`. Note that for $N+1$ consecutive uppercase letters, the first $N$ form a single word, and the last one starts the next word;
-- `"TestCase1" -> ["Test", "Case1"]` for overload (2.1) and (3.1) which handles non-letter characters (i.e. digits or `'$'`) as lowercase letters, or
-- `"TestCase1" -> ["Test", "Case", "1"]` for overload (2.2) and (3.2) which handles non-letter characters as uppercase ones.
+- `"TestCase1" -> ["Test", "Case1"]` for overload (2.1), (2.2) and (3.1), (3.2) which handles non-letter characters (i.e. digits or `'$'`) as lowercase letters, or
+- `"TestCase1" -> ["Test", "Case", "1"]` for overload (2.3) and (3.3) which handles non-letter characters as uppercase ones.
 
 4. Assume we are converting to upper camel case with overload (2.1). For each word obtained in step 1.2, we convert the first character to uppercase and all following letters to lowercase. Finally, words are converted to `"Example", "Input", "Parse", "Json", "Document", "Test", "Case1"` (Note that `JSON` is converted to `Json`: The uniform conversion rule is applied to each word regardless of its input form);
 5. After concatenation: `"ExampleInputParseJsonDocumentTestCase1"`.

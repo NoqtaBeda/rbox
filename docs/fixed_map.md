@@ -133,7 +133,7 @@ consteval auto make_integral_key_fixed_map(
 Input `kv_pairs` should be a range of key-value pairs whose:
 
 - Keys are unique;
-- Keys are of either integral or enum type;
+- Keys are of either integral type (excluding `bool`) or enum type;
 - Values can be converted to structural type during compile-time (using [`to_static_storage()`](./to_static_storage.md)).
 
 The function returns a reflected constant of the fixed map, which can be extracted via `[: V :]`. Typically, the macro `RBOX_INTEGRAL_KEY_FIXED_MAP` can be used to extract the constant fixed map object.
@@ -143,6 +143,8 @@ The generated fixed map supports the following operations (`using value_type = t
 - `size() -> size_t`: Returns the number of entries.
 - `find(key) -> std::optional<const value_type&>`: Returns an optional reference to the value for the given key, or `std::nullopt` if the input key does not exist.
 - `operator[](key) -> const value_type&`: Returns the value for the given key, or `value_type{}` if the input key does not exist.
+
+> **Note:** Prefer `find()` when you need to distinguish between "key not found" and "the stored value equals `value_type{}`".
 
 The argument `options` contains parameters to fine-tune the behavior during fixed map construction:
 
@@ -178,6 +180,12 @@ constexpr auto map2_entries() -> std::vector<std::pair<color, int>> {
 }
 constexpr auto map2 = RBOX_INTEGRAL_KEY_FIXED_MAP(map2_entries());
 static_assert(map2[color::green] == 0x00FF00);
+
+// Integral key with custom options
+constexpr auto map3 =
+    RBOX_INTEGRAL_KEY_FIXED_MAP(map1_entries(), {.min_load_factor = 0.7});
+static_assert(map3.size() == 3);
+static_assert(map3[1] == "one");
 ```
 
 ### String-Key
@@ -224,9 +232,11 @@ The generated fixed map supports the following operations (`using value_type = t
 - `find(key) -> std::optional<const value_type&>`: Returns an optional reference to the value for the given key, or `std::nullopt` if the input key does not exist.
 - `operator[](key) -> const value_type&`: Returns the value for the given key, or `value_type{}` if the input key does not exist.
 
+> **Note:** Prefer `find()` when you need to distinguish between "key not found" and "the stored value equals `value_type{}`".
+
 The argument `options` contains parameters to fine-tune the behavior during fixed map construction:
 
-- `already_ascii_only` (default: `false`): Whether input keys contain ASCII characters only. This option takes effect only if already_unique is true (see [below](#string-key)), and helps improve compile-time performance by skipping case conversion if it is ensured that keys only contain ASCII characters and are already lowercase. UB or wrong result may occur if this flag is set to true but the input keys are not actually ASCII-only.
+- `already_ascii_only` (default: `false`): Whether input keys are guaranteed to contain ASCII characters only. When `ascii_case_insensitive` is enabled, setting this flag to `true` skips the ASCII-only validation of input keys, improving compile-time performance. UB or wrong result may occur if this flag is set to `true` but the input keys contain non-ASCII characters.
 - `already_unique` (default: `false`): Whether input keys are already unique. This option helps improve compile-time performance by skipping key duplication check, if it is ensured that keys are unique. UB or wrong result may occur if this flag is set to true but the input keys are not actually unique.
 - `ascii_case_insensitive` (default: `false`): Whether the fixed map is built in a case-insensitive manner. Only ASCII characters are allowed in input keys when this option is enabled (since no locale data is available during compile-time).
 - `adjusts_alignment` (default: `false`): Whether alignment optimization is enabled. If enabled, then the elements of underlying arrays will be aligned to $2^x$ bytes for maximized random-access performance.

@@ -9,6 +9,8 @@ namespace rbox {
 consteval auto unprivileged_context();
 consteval auto unchecked_context();
 
+#define RBOX_CURRENT_CONTEXT std::meta::access_context::current()
+
 // Member query functions
 consteval auto public_direct_members_of(std::meta::info a) -> std::vector<std::meta::info>;
 consteval auto all_direct_members_of(std::meta::info a) -> std::vector<std::meta::info>;
@@ -56,10 +58,11 @@ consteval T extract(std::meta::info templ, Args... templ_params);
 
 ### Access Contexts
 
-These functions are wrappers of special access contexts:
+These functions or macros are wrappers of special access contexts:
 
 - `unprivileged_context()`: Equivalent to `std::meta::access_context::unprivileged()`.
 - `unchecked_context()`: Equivalent to `std::meta::access_context::unchecked()`.
+- `RBOX_CURRENT_CONTEXT`: Equivalent to `std::meta::access_context::current()`.
 
 ### Member Query Functions
 
