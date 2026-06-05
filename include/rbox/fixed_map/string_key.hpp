@@ -31,6 +31,7 @@
 #include <rbox/utils/ctype/ascii_test.hpp>
 #include <rbox/utils/ctype/case_conversion.hpp>
 #include <rbox/utils/define_static_string.hpp>
+#include <rbox/utils/make_string_view.hpp>
 
 namespace rbox {
 struct string_key_fixed_map_options {
@@ -62,15 +63,18 @@ concept kv_pair_with_skey = is_kv_pair_with_skey(std::meta::remove_cv(^^KVPair))
 constexpr bool has_hash_collision(std::vector<uint64_t> hash_values)
 {
     std::ranges::sort(hash_values);
-    if (hash_values.front() == 0) return true;
-    for (auto it = hash_values.begin(); it + 1 < hash_values.end(); ++it) {
+    const auto* first = hash_values.data();
+    const auto* last = first + hash_values.size();
+    if (*first == 0) return true;
+    for (const auto* it = first; it + 1 < last; ++it) {
         if (*it == *(it + 1)) return true;
     }
     return false;
 }
 
-// Precondition: All keys in kv_pairs are lower case
-// if options.ascii_case_insensitive is true.
+#define RBOX_PARAM(param) .param = options.param
+
+// Precondition: All keys in kv_pairs are lower case if options.ascii_case_insensitive is true.
 template <class CharT, class V>
 consteval auto make_with_skey(
     std::vector<meta_pair<meta_basic_string_view<CharT>, V>> kv_pairs,
@@ -81,60 +85,70 @@ consteval auto make_with_skey(
         return make_empty_with_skey<CharT, V>();
     }
 
-    using kv_pair_type = meta_pair<meta_basic_string_view<CharT>, V>;
+    auto n = kv_pairs.size();
+    const auto* kv_pairs_begin = kv_pairs.data();
+    const auto* kv_pairs_end = kv_pairs_begin + n;
     // Input validation
-    if (!options.already_unique && kv_pairs.size() >= 2) {
-        std::ranges::sort(kv_pairs, {}, &kv_pair_type::first);
-        for (auto it = kv_pairs.begin(); it + 1 < kv_pairs.end(); ++it) {
+    if (!options.already_unique && n >= 2) {
+        // Duplication check
+        std::ranges::sort(kv_pairs, {}, &meta_pair<meta_basic_string_view<CharT>, V>::first);
+        for (const auto* it = kv_pairs_begin; it + 1 < kv_pairs_end; ++it) {
             if (it->first == (it + 1)->first) {
                 compile_error("Duplicated keys are not allowed.");
             }
         }
     }
     if (options.ascii_case_insensitive && !options.already_ascii_only) {
-        for (const auto& [k, _] : kv_pairs) {
-            if (is_ascii_string(k)) continue;
-            compile_error("Only ASCII strings allowed.");
+        // ASCII check
+        for (const auto* it = kv_pairs_begin; it < kv_pairs_end; ++it) {
+            if (!is_ascii_string(it->first)) {
+                compile_error("Only ASCII strings allowed.");
+            }
         }
     }
-    auto kv_pairs_cspan = std::span{std::as_const(kv_pairs)};
-
     // (2) Naive
-    if (kv_pairs.size() < options.optimization_threshold) {
+    if (n < options.optimization_threshold) {
         auto naive_options = naive_with_skey_options{
-            .ascii_case_insensitive = options.ascii_case_insensitive,
+            RBOX_PARAM(ascii_case_insensitive),
         };
-        return make_naive_with_skey(kv_pairs_cspan, naive_options);
+        return make_naive_with_skey(meta_span{kv_pairs_begin, n}, naive_options);
     }
-    auto n = kv_pairs.size();
+
     auto hash_values = std::vector<size_t>(n);
+    auto* hash_values_begin = hash_values.data();
     for (size_t i = 0zU; i < n; i++) {
-        hash_values[i] = bkdr_hash(kv_pairs[i].first);
+        hash_values_begin[i] = bkdr_hash(kv_pairs_begin[i].first);
     }
     auto has_collision = has_hash_collision(hash_values);
     // (3) Hash table
     if (!has_collision && options.max_n_iterations > 0) {
-        auto hash_table_options = hash_table_with_skey_options{
-            .ascii_case_insensitive = options.ascii_case_insensitive,
-            .adjusts_alignment = options.adjusts_alignment,
-            .min_load_factor = options.min_load_factor,
-            .max_n_hash_probing_attempts = options.max_n_hash_probing_attempts,
-            .max_n_iterations = options.max_n_iterations,
-        };
-        auto res = try_make_hash_table_with_skey(kv_pairs_cspan, hash_values, hash_table_options);
+        auto res = try_make_hash_table_with_skey(
+            meta_span{kv_pairs_begin, n},
+            meta_span{hash_values_begin, n},
+            hash_table_with_skey_options{
+                RBOX_PARAM(ascii_case_insensitive),
+                RBOX_PARAM(adjusts_alignment),
+                RBOX_PARAM(min_load_factor),
+                RBOX_PARAM(max_n_hash_probing_attempts),
+                RBOX_PARAM(max_n_iterations),
+            });
         if (res.has_value()) {
             return *res;
         }
     }
     // (4) Hash search
-    auto hash_search_options = hash_search_with_skey_options{
-        .ascii_case_insensitive = options.ascii_case_insensitive,
-        .adjusts_alignment = options.adjusts_alignment,
-        .binary_search_threshold = options.binary_search_threshold,
-    };
     return make_hash_search_with_skey(
-        kv_pairs_cspan, hash_values, has_collision, hash_search_options);
+        meta_span{kv_pairs_begin, n},
+        meta_span{hash_values_begin, n},
+        has_collision,
+        hash_search_with_skey_options{
+            RBOX_PARAM(ascii_case_insensitive),
+            RBOX_PARAM(adjusts_alignment),
+            RBOX_PARAM(binary_search_threshold),
+        });
 }
+
+#undef RBOX_PARAM
 }  // namespace impl::map
 
 template <std::ranges::input_range KVPairRange>
@@ -156,7 +170,7 @@ consteval auto make_string_key_fixed_map(
         }
     } else {
         for (const auto& [k, v] : kv_pairs) {
-            auto s = rbox::define_static_string(k);
+            auto s = rbox::define_static_string(make_string_view(k));
             converted.push_back({s, to_static_storage(v)});
         }
     }

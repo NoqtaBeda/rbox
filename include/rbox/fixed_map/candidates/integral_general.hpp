@@ -81,8 +81,8 @@ constexpr auto general_with_ikey_v = general_with_ikey{Dense, LeftSparse, RightS
 
 template <class K, class V>
 consteval auto make_general_with_ikey(
-    std::span<const meta_pair<K, V>> left_sparse_entries,
-    std::span<const meta_pair<K, V>> right_sparse_entries,
+    meta_span<meta_pair<K, V>> left_sparse_entries,
+    meta_span<meta_pair<K, V>> right_sparse_entries,
     general_with_ikey_options options) -> std::meta::info
 {
     auto sparse_options = sparse_with_ikey_options{
@@ -95,7 +95,7 @@ consteval auto make_general_with_ikey(
     auto dense_options = dense_with_ikey_options{
         .adjusts_alignment = options.adjusts_alignment,
     };
-    auto dense_span_entries = std::span{left_sparse_entries.end(), right_sparse_entries.begin()};
+    auto dense_span_entries = meta_span{left_sparse_entries.end(), right_sparse_entries.begin()};
     auto dense = make_dense_with_ikey(dense_span_entries, dense_options);
 
     auto params_il = {dense, left_sparse, right_sparse};

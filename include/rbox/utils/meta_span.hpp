@@ -46,6 +46,9 @@ struct meta_span {
     // Trivial construction
     constexpr meta_span() = default;
 
+    consteval meta_span(const T* head, size_t n) : head(head), n(n) {}
+    consteval meta_span(const T* head, const T* tail) : head(head), n(tail - head) {}
+
     template <size_t N>
     consteval meta_span(const T (&arr)[N]) : head(arr), n(N)
     {

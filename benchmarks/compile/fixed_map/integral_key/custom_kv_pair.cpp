@@ -20,46 +20,33 @@
  * SOFTWARE.
  **/
 
-#ifndef RBOX_FIXED_MAP_IMPL_COMMON_HPP
-#define RBOX_FIXED_MAP_IMPL_COMMON_HPP
+#include <rbox/fixed_map/integral_key.hpp>
 
-#include <bit>
-#include <type_traits>
-#include <utility>
+extern "C" {
+[[gnu::visibility("default")]]
+const char* test_custom_kv_pair(char key)
+{
+    constexpr auto map = RBOX_INTEGRAL_KEY_FIXED_MAP(
+        std::initializer_list<std::pair<char, const char*>>{
+            {"Apple"[0], "Apple"},
+            {"Banana"[0], "Banana"},
+            {"Cat"[0], "Cat"},
+            {"Dog"[0], "Dog"},
+            {"Foo"[0], "Foo"},
+            {"Horse"[0], "Horse"},
+            {"Island"[0], "Island"},
+            {"Rabbit"[0], "Rabbit"},
+            {"Snake"[0], "Snake"},
+            {"Zebra"[0], "Zebra"},
+        },
+        rbox::integral_key_fixed_map_options{
+            .min_load_factor = 0.5,
+            .binary_search_threshold = 8,
+        });
 
-namespace rbox::impl::map {
-template <class V>
-constexpr auto default_v = V{};
-
-template <class T>
-struct aligned {
-    static constexpr auto alignment = std::bit_ceil(sizeof(T));
-
-    alignas(alignment) T underlying;
-
-    constexpr aligned() = default;
-
-    constexpr aligned(T value) : underlying(std::move(value)) {}
-
-    constexpr auto operator=(T value) -> aligned&
-    {
-        underlying = std::move(value);
-        return *this;
+    if (auto opt = map.find(key); opt) {
+        return opt->head;
     }
-
-    constexpr operator T&()
-    {
-        return underlying;
-    }
-
-    constexpr operator const T&() const
-    {
-        return underlying;
-    }
-};
-
-template <bool A, class T>
-using aligned_if_t = std::conditional_t<A, aligned<T>, T>;
-}  // namespace rbox::impl::map
-
-#endif  // RBOX_FIXED_MAP_IMPL_COMMON_HPP
+    return nullptr;
+}
+}  // extern "C"

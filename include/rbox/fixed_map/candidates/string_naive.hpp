@@ -43,7 +43,7 @@ private:
 public:
     constexpr auto size() const -> size_t
     {
-        return entries.size();
+        return entries.n;
     }
 
     constexpr auto find(std::basic_string_view<CharT> key) const -> std::optional<const value_type&>
@@ -73,7 +73,7 @@ struct naive_with_skey_options {
 
 template <class CharT, class V, template <class> class Policy>
 consteval auto make_naive_with_skey_impl(
-    std::span<const meta_pair<meta_basic_string_view<CharT>, V>> kv_pairs) -> std::meta::info
+    meta_span<meta_pair<meta_basic_string_view<CharT>, V>> kv_pairs) -> std::meta::info
 {
     // Makes obj
     auto entries = rbox::define_static_array(kv_pairs);
@@ -83,16 +83,15 @@ consteval auto make_naive_with_skey_impl(
 
 template <class CharT, class V>
 consteval auto make_naive_with_skey(
-    std::span<const meta_pair<meta_basic_string_view<CharT>, V>> kv_pairs,
+    meta_span<meta_pair<meta_basic_string_view<CharT>, V>> kv_pairs,
     const naive_with_skey_options& options) -> std::meta::info
 {
     // (1) Empty
-    if (kv_pairs.empty()) {
+    if (kv_pairs.n == 0) {
         return make_empty_with_skey<CharT, V>();
     }
     // (2) Naive
-    using call_signature =
-        std::meta::info(std::span<const meta_pair<meta_basic_string_view<CharT>, V>>);
+    using call_signature = std::meta::info(meta_span<meta_pair<meta_basic_string_view<CharT>, V>>);
     auto policy = get_skey_policy_template(options.ascii_case_insensitive);
     auto fn = extract<call_signature*>(^^make_naive_with_skey_impl, ^^CharT, ^^V, policy);
     return fn(kv_pairs);

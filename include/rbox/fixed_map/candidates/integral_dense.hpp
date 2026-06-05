@@ -61,7 +61,7 @@ struct fully_dense_with_ikey {
     using value_type = V;
 
 private:
-    using element_type = std::conditional_t<A, aligned<V>, V>;
+    using element_type = aligned_if_t<A, V>;
 
 public:
     constexpr auto size() const -> size_t
@@ -72,7 +72,7 @@ public:
     constexpr auto find(key_type key) const -> std::optional<const value_type&>
     {
         if (key >= min_key && key <= max_key) {
-            return unwrap(entries[key - min_key]);
+            return entries[key - min_key];
         }
         return std::nullopt;
     }
@@ -88,7 +88,7 @@ public:
     constexpr auto operator[](key_type key) const -> const value_type&
     {
         if (key >= min_key && key <= max_key) {
-            return unwrap(entries[key - min_key]);
+            return entries[key - min_key];
         }
         return default_v<value_type>;
     }
@@ -112,7 +112,7 @@ struct non_null_dense_with_ikey {
     using value_type = V;
 
 private:
-    using element_type = std::conditional_t<A, aligned<V>, V>;
+    using element_type = aligned_if_t<A, V>;
 
 public:
     constexpr auto size() const -> size_t
@@ -123,7 +123,7 @@ public:
     constexpr auto find(key_type key) const -> std::optional<const value_type&>
     {
         if (key >= min_key && key <= max_key) {
-            const auto& target = unwrap(entries[key - min_key]);
+            const value_type& target = entries[key - min_key];
             if (!is_hole(target)) {
                 return target;
             }
@@ -142,7 +142,7 @@ public:
     constexpr auto operator[](key_type key) const -> const value_type&
     {
         if (key >= min_key && key <= max_key) {
-            const auto& target = unwrap(entries[key - min_key]);
+            const value_type& target = entries[key - min_key];
             if (!is_hole(target)) {
                 return target;
             }
@@ -170,8 +170,8 @@ struct dense_with_ikey {
     using value_type = V;
 
 private:
-    using element_pair_type = meta_pair<V, bool>;
-    using element_type = std::conditional_t<A, aligned<element_pair_type>, element_pair_type>;
+    using raw_element_type = meta_pair<V, bool>;
+    using element_type = std::conditional_t<A, aligned<raw_element_type>, raw_element_type>;
 
 public:
     constexpr auto size() const -> size_t
@@ -182,7 +182,7 @@ public:
     constexpr auto find(key_type key) const -> std::optional<const value_type&>
     {
         if (key >= min_key && key <= max_key) {
-            const auto& target_entry = unwrap(entries[key - min_key]);
+            const raw_element_type& target_entry = entries[key - min_key];
             if (target_entry.second) {
                 return target_entry.first;
             }
@@ -201,7 +201,7 @@ public:
     constexpr auto operator[](key_type key) const -> const value_type&
     {
         if (key >= min_key && key <= max_key) {
-            const auto& target_entry = unwrap(entries[key - min_key]);
+            const raw_element_type& target_entry = entries[key - min_key];
             if (target_entry.second) {
                 return target_entry.first;
             }
@@ -229,128 +229,92 @@ struct dense_with_ikey_options {
     bool adjusts_alignment;
 };
 
-template <class K, class V>
+template <bool A, class K, class V>
 consteval auto make_fully_dense_with_ikey(
-    std::span<const meta_pair<K, V>> sorted_input,
-    dense_with_ikey_options options,
-    K min_key,
-    K max_key) -> std::meta::info
+    meta_span<meta_pair<K, V>> sorted_input, K min_key, K max_key) -> std::meta::info
 {
-    auto n = sorted_input.size();
-    if (options.adjusts_alignment) {
-        // (2.1) with alignment optimization
-        auto aligned_values = std::vector<aligned<V>>{};
-        aligned_values.reserve(n);
-        for (const auto& [_, v] : sorted_input) {
-            aligned_values.push_back(aligned{v});
-        }
-        auto entries = std::define_static_array(aligned_values);
-        auto obj = fully_dense_with_ikey<true, K, V>{entries.data(), min_key, max_key};
-        return std::meta::reflect_constant(obj);
-    } else {
-        // (2.2) without alignment optimization
-        auto values = std::vector<V>{};
-        values.reserve(n);
-        for (const auto& [_, v] : sorted_input) {
-            values.push_back(v);
-        }
-        auto entries = std::define_static_array(values);
-        auto obj = fully_dense_with_ikey<false, K, V>{entries.data(), min_key, max_key};
-        return std::meta::reflect_constant(obj);
+    auto n = sorted_input.n;
+    auto values = std::vector<aligned_if_t<A, V>>{};
+    values.reserve(n);
+    for (const auto& cur : sorted_input) {
+        values.push_back(cur.second);
     }
+    const auto* values_data = std::define_static_array(values).data();
+    auto obj = fully_dense_with_ikey<A, K, V>{values_data, min_key, max_key};
+    return std::meta::reflect_constant(obj);
 }
 
-template <class K, class V>
+template <bool A, class K, class V>
 consteval auto make_non_null_dense_with_ikey(
-    std::span<const meta_pair<K, V>> sorted_input,
-    dense_with_ikey_options options,
-    K min_key,
-    K max_key) -> std::meta::info
+    meta_span<meta_pair<K, V>> sorted_input, K min_key, K max_key) -> std::meta::info
 {
-    auto n = sorted_input.size();
+    auto n = sorted_input.n;
     auto table_size = static_cast<size_t>(max_key - min_key + 1);
 
-    if (options.adjusts_alignment) {
-        auto aligned_values = std::vector<aligned<V>>(table_size, aligned<V>{});
-        for (const auto& entry : sorted_input) {
-            aligned_values[entry.first - min_key].underlying = entry.second;
-        }
-        auto entries = std::define_static_array(aligned_values);
-        auto obj = non_null_dense_with_ikey<true, K, V>{entries.data(), n, min_key, max_key};
-        return std::meta::reflect_constant(obj);
-    } else {
-        auto values = std::vector<V>(table_size, V{});
-        for (const auto& entry : sorted_input) {
-            values[entry.first - min_key] = entry.second;
-        }
-        auto entries = std::define_static_array(values);
-        auto obj = non_null_dense_with_ikey<false, K, V>{entries.data(), n, min_key, max_key};
-        return std::meta::reflect_constant(obj);
+    using element_type = aligned_if_t<A, V>;
+    auto values = std::vector<element_type>(table_size, element_type{});
+    for (const auto& cur : sorted_input) {
+        V& dest = values[cur.first - min_key];
+        dest = cur.second;
     }
+    const auto* values_data = std::define_static_array(values).data();
+    auto obj = non_null_dense_with_ikey<A, K, V>{values_data, n, min_key, max_key};
+    return std::meta::reflect_constant(obj);
+}
+
+template <bool A, class K, class V>
+consteval auto make_generic_dense_with_ikey(
+    meta_span<meta_pair<K, V>> sorted_input, K min_key, K max_key) -> std::meta::info
+{
+    auto n = sorted_input.n;
+    auto table_size = static_cast<size_t>(max_key - min_key + 1);
+
+    using element_type = aligned_if_t<A, meta_pair<V, bool>>;
+    auto values = std::vector<element_type>(table_size, element_type{});
+    for (const auto& cur : sorted_input) {
+        meta_pair<V, bool>& dest = values[cur.first - min_key];
+        dest.first = cur.second;
+        dest.second = true;  // is_valid flag
+    }
+    const auto* values_data = std::define_static_array(values).data();
+    auto obj = dense_with_ikey<A, K, V>{values_data, n, min_key, max_key};
+    return std::meta::reflect_constant(obj);
 }
 
 template <class K, class V>
 consteval auto make_dense_with_ikey(
-    std::span<const meta_pair<K, V>> sorted_input,
-    dense_with_ikey_options options,
-    K min_key,
-    K max_key) -> std::meta::info
+    meta_span<meta_pair<K, V>> sorted_input, dense_with_ikey_options options) -> std::meta::info
 {
-    auto n = sorted_input.size();
-    auto table_size = static_cast<size_t>(max_key - min_key + 1);
-
-    if (options.adjusts_alignment) {
-        using aligned_pair_type = aligned<meta_pair<V, bool>>;
-        auto aligned_values = std::vector<aligned_pair_type>(table_size, aligned_pair_type{});
-        for (const auto& entry : sorted_input) {
-            auto& dest = aligned_values[entry.first - min_key].underlying;
-            dest.first = entry.second;
-            dest.second = true;  // is_valid flag
-        }
-        auto entries = std::define_static_array(aligned_values);
-        auto obj = dense_with_ikey<true, K, V>{entries.data(), n, min_key, max_key};
-        return std::meta::reflect_constant(obj);
-    } else {
-        auto values = std::vector<meta_pair<V, bool>>(table_size, meta_pair<V, bool>{});
-        for (const auto& entry : sorted_input) {
-            auto& dest = values[entry.first - min_key];
-            dest.first = entry.second;
-            dest.second = true;  // is_valid flag
-        }
-        auto entries = std::define_static_array(values);
-        auto obj = dense_with_ikey<false, K, V>{entries.data(), n, min_key, max_key};
-        return std::meta::reflect_constant(obj);
-    }
-}
-
-template <class K, class V>
-consteval auto make_dense_with_ikey(
-    std::span<const meta_pair<K, V>> sorted_input, dense_with_ikey_options options)
-    -> std::meta::info
-{
-    auto n = sorted_input.size();
+    auto n = sorted_input.n;
     if (n == 0) {
         // (1) Empty
         return make_empty_with_ikey<V>();
     }
+
+    using call_signature = std::meta::info(meta_span<meta_pair<K, V>>, K, K);
+    auto A = std::meta::reflect_constant(options.adjusts_alignment);
+
     auto min_key = sorted_input.front().first;
     auto max_key = sorted_input.back().first;
     if (max_key - min_key + 1 == n) {
         // (2) Fully dense
-        return make_fully_dense_with_ikey(sorted_input, options, min_key, max_key);
+        auto fn = extract<call_signature*>(^^make_fully_dense_with_ikey, A, ^^K, ^^V);
+        return fn(sorted_input, min_key, max_key);
     }
     if constexpr (may_have_holes<V>) {
         auto has_holes = false;
-        for (auto i = 0zU; !has_holes && i < n; i++) {
-            has_holes |= (sorted_input[i].second == default_v<V>);
+        for (const auto *it = sorted_input.head, *end = it + n; !has_holes && it < end; it++) {
+            has_holes |= is_hole(it->second);
         }
         // (3) Non-null dense (no value happen to be equal to default_v<V>)
         if (!has_holes) {
-            return make_non_null_dense_with_ikey(sorted_input, options, min_key, max_key);
+            auto fn = extract<call_signature*>(^^make_non_null_dense_with_ikey, A, ^^K, ^^V);
+            return fn(sorted_input, min_key, max_key);
         }
     }
     // (4) Dense (with an additional flag for validation)
-    return make_dense_with_ikey(sorted_input, options, min_key, max_key);
+    auto fn = extract<call_signature*>(^^make_generic_dense_with_ikey, A, ^^K, ^^V);
+    return fn(sorted_input, min_key, max_key);
 }
 }  // namespace rbox::impl::map
 

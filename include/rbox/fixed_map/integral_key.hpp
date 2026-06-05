@@ -59,33 +59,37 @@ template <class KVPair>
 concept kv_pair_with_ikey = is_kv_pair_with_ikey(std::meta::remove_cv(^^KVPair));
 
 template <class K, class V>
+consteval bool is_dense_closed_range(
+    const meta_pair<K, V>* head, const meta_pair<K, V>* tail, double min_load_factor)
+{
+    auto n_slots = static_cast<double>(tail->first) - static_cast<double>(head->first) + 1.0;
+    auto n_non_hole_entries = static_cast<double>(tail - head + 1);
+    return n_slots * min_load_factor <= n_non_hole_entries;
+}
+
+template <class K, class V>
 consteval auto find_longest_dense_subrange(
     const std::vector<meta_pair<K, V>>& sorted_kv_pairs, double min_load_factor)
-/* -> std::pair<iterator, iterator> */
+    -> meta_pair<const meta_pair<K, V>*, const meta_pair<K, V>*>
 {
-    auto is_dense_closed_range = [min_load_factor](auto head, auto tail) {
-        auto n_slots = static_cast<double>(tail->first) - static_cast<double>(head->first) + 1.0;
-        auto n_non_hole_entries = static_cast<double>(tail - head + 1);
-        return n_slots * min_load_factor <= n_non_hole_entries;
-    };
-    auto begin = sorted_kv_pairs.begin();
-    auto end = sorted_kv_pairs.end();
+    const auto* begin = sorted_kv_pairs.data();
+    const auto* end = sorted_kv_pairs.data() + sorted_kv_pairs.size();
     // Fast path: fully continuous
-    if (is_dense_closed_range(begin, end - 1)) {
-        return std::pair{begin, end};
+    if (is_dense_closed_range(begin, end - 1, min_load_factor)) {
+        return meta_pair{begin, end};
     }
-    auto max_len_head = begin;
-    auto max_len_tail = begin;
-    for (auto head = begin, tail = begin + 1; tail < end; ++tail) {
+
+    const auto* max_len_head = begin;
+    const auto* max_len_tail = begin;
+    for (const auto *head = begin, *tail = begin + 1; tail < end; ++tail) {
         // Finds longest [head, tail]
-        for (; head < tail && !is_dense_closed_range(head, tail); ++head) {
-        }
+        for (; head < tail && !is_dense_closed_range(head, tail, min_load_factor); ++head);
         if (tail - head > max_len_tail - max_len_head) {
             max_len_head = head;
             max_len_tail = tail;
         }
     }
-    return std::pair{max_len_head, max_len_tail + 1};
+    return meta_pair{max_len_head, max_len_tail + 1};
 }
 
 template <class K, class V>
@@ -101,20 +105,24 @@ consteval auto make_with_ikey(
     if (!options.already_sorted) {
         std::ranges::sort(kv_pairs, {}, &meta_pair<K, V>::first);
     }
-    if (!options.already_unique) {
-        for (auto it = kv_pairs.begin(); it + 1 < kv_pairs.end(); ++it) {
+    auto n = kv_pairs.size();
+    const auto* kv_pairs_begin = kv_pairs.data();
+    const auto* kv_pairs_end = kv_pairs_begin + n;
+
+    if (!options.already_unique && n >= 2) {
+        for (const auto* it = kv_pairs_begin; it + 1 < kv_pairs_end; ++it) {
             if (it->first == (it + 1)->first) {
                 compile_error("Duplicated keys are not allowed.");
             }
         }
     }
     auto [dense_begin, dense_end] = find_longest_dense_subrange(kv_pairs, options.min_load_factor);
-    if (kv_pairs.size() == dense_end - dense_begin) {
+    if (dense_end - dense_begin == n) {
         // (2) Dense
         auto dense_options = dense_with_ikey_options{
             .adjusts_alignment = options.adjusts_alignment,
         };
-        return make_dense_with_ikey(std::span{std::as_const(kv_pairs)}, dense_options);
+        return make_dense_with_ikey(meta_span{kv_pairs_begin, n}, dense_options);
     }
     if (dense_end - dense_begin < options.dense_lookup_threshold) {
         // (3) Sparse
@@ -122,15 +130,15 @@ consteval auto make_with_ikey(
             .adjusts_alignment = options.adjusts_alignment,
             .binary_search_threshold = options.binary_search_threshold,
         };
-        return make_sparse_with_ikey(std::span{std::as_const(kv_pairs)}, sparse_options);
+        return make_sparse_with_ikey(meta_span{kv_pairs_begin, n}, sparse_options);
     }
     // (4) General
     auto general_options = general_with_ikey_options{
         .adjusts_alignment = options.adjusts_alignment,
         .binary_search_threshold = options.binary_search_threshold,
     };
-    auto left_sparse = std::span{kv_pairs.cbegin(), dense_begin};
-    auto right_sparse = std::span{dense_end, kv_pairs.cend()};
+    auto left_sparse = meta_span{kv_pairs_begin, dense_begin};
+    auto right_sparse = meta_span{dense_end, kv_pairs_end};
     return make_general_with_ikey(left_sparse, right_sparse, general_options);
 }
 }  // namespace impl::map

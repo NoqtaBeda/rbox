@@ -42,7 +42,7 @@ private:
 public:
     constexpr auto size() const -> size_t
     {
-        return entries.size();
+        return entries.n;
     }
 
     constexpr auto find(key_type key) const -> std::optional<const value_type&>
@@ -63,10 +63,22 @@ public:
         return find(static_cast<key_type>(key));
     }
 
+    constexpr auto operator[](key_type key) const -> const value_type&
+    {
+        for (const auto& cur : entries) {
+            if (key == cur.first) {
+                return cur.second;
+            }
+        }
+        return default_v<value_type>;
+    }
+
     constexpr auto operator[](non_bool_integral auto key) const -> const value_type&
     {
-        auto p = find(key);
-        return p ? *p : default_v<value_type>;
+        if (!in_range<key_type>(key)) {
+            return default_v<value_type>;
+        }
+        return operator[](static_cast<key_type>(key));
     }
 
     meta_span<element_type> entries;
@@ -78,30 +90,37 @@ struct binary_search_with_ikey {
     using value_type = V;
 
 private:
-    using element_type = std::conditional_t<A, aligned<meta_pair<K, V>>, meta_pair<K, V>>;
+    using raw_element_type = meta_pair<K, V>;
+    using element_type = aligned_if_t<A, raw_element_type>;
 
 public:
+#define RBOX_INTEGRAL_SPARSE_DO_FIND()                  \
+    do {                                                \
+        const auto* head = entries.head;                \
+        const auto* tail = entries.head + entries.n;    \
+        while (head < tail) {                           \
+            const auto* mid = head + (tail - head) / 2; \
+            const raw_element_type& entry = *mid;       \
+                                                        \
+            if (key == entry.first) [[unlikely]] {      \
+                return entry.second;                    \
+            }                                           \
+            if (key > entry.first) {                    \
+                head = mid + 1;                         \
+            } else {                                    \
+                tail = mid;                             \
+            }                                           \
+        }                                               \
+    } while (false)
+
     constexpr auto size() const -> size_t
     {
-        return entries.size();
+        return entries.n;
     }
 
     constexpr auto find(key_type key) const -> std::optional<const value_type&>
     {
-        const auto* head = entries.begin();
-        const auto* tail = entries.end();
-        while (head < tail) {
-            const auto* mid = head + (tail - head) / 2;
-            const auto& entry = unwrap(*mid);
-            if (key == entry.first) [[unlikely]] {
-                return entry.second;
-            }
-            if (key > entry.first) {
-                head = mid + 1;
-            } else {
-                tail = mid;
-            }
-        }
+        RBOX_INTEGRAL_SPARSE_DO_FIND();
         return std::nullopt;
     }
 
@@ -113,11 +132,21 @@ public:
         return find(static_cast<key_type>(key));
     }
 
+    constexpr auto operator[](key_type key) const -> const value_type&
+    {
+        RBOX_INTEGRAL_SPARSE_DO_FIND();
+        return default_v<value_type>;
+    }
+
     constexpr auto operator[](non_bool_integral auto key) const -> const value_type&
     {
-        auto p = find(key);
-        return p ? *p : default_v<value_type>;
+        if (!in_range<key_type>(key)) {
+            return default_v<value_type>;
+        }
+        return operator[](static_cast<key_type>(key));
     }
+
+#undef RBOX_INTEGRAL_SPARSE_DO_FIND
 
     meta_span<element_type> entries;
 };
@@ -129,38 +158,41 @@ struct sparse_with_ikey_options {
     size_t binary_search_threshold;
 };
 
-template <class K, class V>
-consteval auto make_sparse_with_ikey(
-    std::span<const meta_pair<K, V>> sorted_entries, sparse_with_ikey_options options)
+template <bool A, class K, class V>
+consteval auto make_binary_search_sparse_with_ikey(meta_span<meta_pair<K, V>> sorted_input)
     -> std::meta::info
 {
-    auto n = sorted_entries.size();
+    auto n = sorted_input.n;
+    auto entries = std::vector<aligned_if_t<A, meta_pair<K, V>>>{};
+    entries.reserve(n);
+    for (const auto *it = sorted_input.head, *end = it + n; it < end; ++it) {
+        entries.push_back(*it);
+    }
+    auto entries_span = rbox::define_static_array(entries);
+    auto obj = binary_search_with_ikey<A, K, V>{entries_span};
+    return std::meta::reflect_constant(obj);
+}
+
+template <class K, class V>
+consteval auto make_sparse_with_ikey(
+    meta_span<meta_pair<K, V>> sorted_input, sparse_with_ikey_options options) -> std::meta::info
+{
+    auto n = sorted_input.n;
     if (n == 0) {
         // (1) Empty
         return make_empty_with_ikey<V>();
     }
     if (n < options.binary_search_threshold) {
         // (2) Linear
-        auto entries = rbox::define_static_array(sorted_entries);
+        auto entries = rbox::define_static_array(sorted_input);
         auto obj = linear_search_with_ikey<K, V>{entries};
         return std::meta::reflect_constant(obj);
     }
     // (3) Binary search
-    if (options.adjusts_alignment) {
-        // (3.1) with alignment optimization
-        auto aligned_entries = std::vector<aligned<meta_pair<K, V>>>{};
-        aligned_entries.reserve(n);
-        for (const auto& entry : sorted_entries) {
-            aligned_entries.push_back(aligned{entry});
-        }
-        auto entries = rbox::define_static_array(aligned_entries);
-        auto obj = binary_search_with_ikey<true, K, V>{entries};
-        return std::meta::reflect_constant(obj);
-    }
-    // (3.2) without alignment optimization
-    auto entries = rbox::define_static_array(sorted_entries);
-    auto obj = binary_search_with_ikey<false, K, V>{entries};
-    return std::meta::reflect_constant(obj);
+    using call_signature = std::meta::info(meta_span<meta_pair<K, V>>);
+    auto A = std::meta::reflect_constant(options.adjusts_alignment);
+    auto fn = extract<call_signature*>(^^make_binary_search_sparse_with_ikey, A, ^^K, ^^V);
+    return fn(sorted_input);
 }
 }  // namespace rbox::impl::map
 

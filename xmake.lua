@@ -120,3 +120,18 @@ target("benchmarks-enum-enum_cast", function ()
   set_languages("c++26")
   add_includedirs("include")
 end)
+
+-- Benchmarks to test compilation speed
+local benchmark_compile_files = os.files("benchmarks/compile/fixed_map/**/*.cpp")
+for _, file in ipairs(benchmark_compile_files) do
+    local rel = string.gsub(file, "^benchmarks/compile/", "")
+    local name = string.gsub(rel, "/", "-")
+    name = string.gsub(name, "%.cpp$", "")
+    target("benchmarks-compile-" .. name, function ()
+        set_kind("shared")
+        add_files(file)
+        set_languages("c++26")
+        add_includedirs("include")
+        add_cxxflags("visibility=hidden", "-fconstexpr-ops-limit=134217728")
+    end)
+end
