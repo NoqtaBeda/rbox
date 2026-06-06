@@ -36,6 +36,7 @@
 #include <rbox/utils/meta_tuple.hpp>
 #include <rbox/utils/meta_utility.hpp>
 #include <rbox/utils/meta_variant.hpp>
+#include <rbox/utils/tuple_size.hpp>
 
 namespace rbox {
 namespace impl {
@@ -145,7 +146,7 @@ consteval auto tuple_like_to_static_storage(const TupleLike& tuple, std::index_s
 template <class TupleLike>
 consteval auto tuple_like_to_static_storage(const TupleLike& tuple)
 {
-    constexpr auto N = std::tuple_size_v<TupleLike>;
+    constexpr auto N = rbox::tuple_size_v<TupleLike>;
     if constexpr (N == 2) {
         auto v1 = to_static_storage(get_first(tuple));
         auto v2 = to_static_storage(get_second(tuple));

@@ -23,7 +23,6 @@
 #ifndef RBOX_FIXED_MAP_STRING_KEY_HPP
 #define RBOX_FIXED_MAP_STRING_KEY_HPP
 
-#include <algorithm>
 #include <rbox/fixed_map/candidates/string_by_hash_search.hpp>
 #include <rbox/fixed_map/candidates/string_by_hash_table.hpp>
 #include <rbox/fixed_map/candidates/string_naive.hpp>
@@ -32,6 +31,8 @@
 #include <rbox/utils/ctype/case_conversion.hpp>
 #include <rbox/utils/define_static_string.hpp>
 #include <rbox/utils/make_string_view.hpp>
+#include <rbox/utils/stdlib/algorithm/sort.hpp>
+#include <rbox/utils/tuple_element.hpp>
 
 namespace rbox {
 struct string_key_fixed_map_options {
@@ -62,9 +63,9 @@ concept kv_pair_with_skey = is_kv_pair_with_skey(std::meta::remove_cv(^^KVPair))
 // Precondition: not hash_values.empty()
 constexpr bool has_hash_collision(std::vector<uint64_t> hash_values)
 {
-    std::ranges::sort(hash_values);
-    const auto* first = hash_values.data();
-    const auto* last = first + hash_values.size();
+    auto* first = hash_values.data();
+    auto* last = first + hash_values.size();
+    std::sort(first, last);
     if (*first == 0) return true;
     for (const auto* it = first; it + 1 < last; ++it) {
         if (*it == *(it + 1)) return true;
@@ -80,18 +81,21 @@ consteval auto make_with_skey(
     std::vector<meta_pair<meta_basic_string_view<CharT>, V>> kv_pairs,
     const string_key_fixed_map_options& options) -> std::meta::info
 {
+    using kv_pair_t = meta_pair<meta_basic_string_view<CharT>, V>;
+    auto n = kv_pairs.size();
+    auto* kv_pairs_begin = kv_pairs.data();
+    auto* kv_pairs_end = kv_pairs_begin + n;
+
     // (1) Empty
     if (kv_pairs.empty()) {
         return make_empty_with_skey<CharT, V>();
     }
-
-    auto n = kv_pairs.size();
-    const auto* kv_pairs_begin = kv_pairs.data();
-    const auto* kv_pairs_end = kv_pairs_begin + n;
     // Input validation
     if (!options.already_unique && n >= 2) {
         // Duplication check
-        std::ranges::sort(kv_pairs, {}, &meta_pair<meta_basic_string_view<CharT>, V>::first);
+        std::sort(kv_pairs_begin, kv_pairs_end, [](const kv_pair_t& a, const kv_pair_t& b) {
+            return a.first < b.first;
+        });
         for (const auto* it = kv_pairs_begin; it + 1 < kv_pairs_end; ++it) {
             if (it->first == (it + 1)->first) {
                 compile_error("Duplicated keys are not allowed.");
@@ -158,8 +162,8 @@ consteval auto make_string_key_fixed_map(
     -> std::meta::info
 {
     using KVPair = std::ranges::range_value_t<KVPairRange>;
-    using K = std::tuple_element_t<0, KVPair>;
-    using V = std::tuple_element_t<1, KVPair>;
+    using K = rbox::tuple_element_t<0, KVPair>;
+    using V = rbox::tuple_element_t<1, KVPair>;
     using S = meta_basic_string_view<char_type_t<K>>;
 
     auto converted = std::vector<meta_pair<S, to_static_storage_result_t<V>>>{};

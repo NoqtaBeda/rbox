@@ -26,6 +26,7 @@
 #include <rbox/enum/enum_cast.hpp>
 #include <rbox/enum/enum_flags_contains.hpp>
 #include <rbox/utils/concepts.hpp>
+#include <rbox/utils/stdlib/ranges/views/split.hpp>
 
 namespace rbox {
 namespace impl {

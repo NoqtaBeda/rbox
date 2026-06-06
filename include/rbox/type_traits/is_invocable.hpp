@@ -24,8 +24,8 @@
 #define RBOX_TYPE_TRAITS_IS_INVOCABLE_HPP
 
 #include <meta>
-#include <ranges>
 #include <rbox/utils/config.hpp>
+#include <rbox/utils/stdlib/ranges/views/repeat.hpp>
 #include <type_traits>
 
 namespace rbox {

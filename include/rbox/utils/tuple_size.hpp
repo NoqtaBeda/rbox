@@ -20,23 +20,29 @@
  * SOFTWARE.
  **/
 
-#ifndef RBOX_UTILS_DEFINE_STATIC_STRING_HPP
-#define RBOX_UTILS_DEFINE_STATIC_STRING_HPP
+#ifndef RBOX_UTILS_TUPLE_SIZE_HPP
+#define RBOX_UTILS_TUPLE_SIZE_HPP
 
-#include <rbox/type_traits/arithmetic_types.hpp>
-#include <rbox/utils/config.hpp>
-#include <rbox/utils/meta_string_view.hpp>
-#include <rbox/utils/stdlib/ranges/concepts.hpp>
+/**
+ * Provides rbox::tuple_size_v as a minimal-overhead replacement for
+ * std::tuple_size_v.
+ */
+
+#include <cstddef>  // size_t
+
+#if __has_include(<bits/utility.h>)
+#include <bits/utility.h>  // GCC libstdc++
+#elif __has_include(<__tuple/tuple_size.h>)
+#include <__tuple/tuple_size.h>  // Clang libc++
+#else
+#include <tuple>  // Fallback
+#endif
 
 namespace rbox {
-template <std::ranges::input_range Range>
-    requires (char_type<std::ranges::range_value_t<Range>>)
-consteval auto define_static_string(Range&& range) /* -> meta_basic_string_view<CharT> */
-{
-    using CharT = std::ranges::range_value_t<Range>;
-    auto c_str = std::define_static_string(std::forward<Range>(range));
-    return meta_basic_string_view<CharT>(c_str);
-}
+
+template <class T>
+inline constexpr size_t tuple_size_v = std::tuple_size<T>::value;
+
 }  // namespace rbox
 
-#endif  // RBOX_UTILS_DEFINE_STATIC_STRING_HPP
+#endif  // RBOX_UTILS_TUPLE_SIZE_HPP

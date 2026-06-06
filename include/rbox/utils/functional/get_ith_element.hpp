@@ -24,12 +24,13 @@
 #define RBOX_UTILS_FUNCTIONAL_GET_ITH_ELEMENT_HPP
 
 #include <rbox/type_traits/tuple_like_types.hpp>
+#include <rbox/utils/tuple_size.hpp>
 
 namespace rbox {
 // -------- Generic tuple-like access --------
 namespace impl {
 template <class T, size_t I>
-concept tuple_like_with_index = tuple_like<T> && (I < std::tuple_size_v<T>);
+concept tuple_like_with_index = tuple_like<T> && (I < rbox::tuple_size_v<T>);
 }  // namespace impl
 
 template <size_t I>

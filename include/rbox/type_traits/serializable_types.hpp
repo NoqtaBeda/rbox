@@ -23,14 +23,14 @@
 #ifndef RBOX_TYPE_TRAITS_SERIALIZABLE_TYPES_HPP
 #define RBOX_TYPE_TRAITS_SERIALIZABLE_TYPES_HPP
 
-#include <algorithm>
 #include <optional>
-#include <ranges>
 #include <rbox/type_traits/class_types/flattened_nsdm.hpp>
 #include <rbox/type_traits/string_like_types.hpp>
 #include <rbox/type_traits/tuple_like_types.hpp>
 #include <rbox/type_traits/variant_like_types.hpp>
 #include <rbox/utils/meta_utility.hpp>
+#include <rbox/utils/stdlib/algorithm/sort.hpp>
+#include <rbox/utils/stdlib/ranges/concepts.hpp>
 #include <variant>
 
 namespace rbox {
@@ -58,9 +58,11 @@ consteval bool test_serializable_flattened_members(
         names.push_back(std::meta::identifier_of(M.info));
     }
     if (names.size() >= 2) {
+        auto* names_data = names.data();
+        auto* names_data_end = names_data + names.size();
         // Checks name duplication
-        std::ranges::sort(names);
-        for (auto it = names.begin(); it + 1 < names.end(); ++it) {
+        std::sort(names_data, names_data_end);
+        for (const auto* it = names_data; it + 1 < names_data_end; ++it) {
             if (*it == *(it + 1)) return false;
         }
     }

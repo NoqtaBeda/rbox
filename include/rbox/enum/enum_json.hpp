@@ -28,6 +28,7 @@
 #include <rbox/utils/concepts.hpp>
 #include <rbox/utils/define_static_string.hpp>
 #include <rbox/utils/max_decimal_digits.hpp>
+#include <rbox/utils/tuple_element.hpp>
 #include <string>
 
 namespace rbox {
@@ -36,7 +37,7 @@ template <class EntriesSpan>
 constexpr auto enum_json_buffer_size(EntriesSpan entries) -> size_t
 {
     using Entry = std::ranges::range_value_t<EntriesSpan>;
-    using E = std::tuple_element_t<0, Entry>;
+    using E = rbox::tuple_element_t<0, Entry>;
     // 4 : 4 punctuation characters "":, per entry
     auto size_per_entry = 4zU + max_decimal_digits(sizeof(E));
     // 2 : 2 punctuation characters {}

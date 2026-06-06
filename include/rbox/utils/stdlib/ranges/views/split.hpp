@@ -20,23 +20,17 @@
  * SOFTWARE.
  **/
 
-#ifndef RBOX_UTILS_DEFINE_STATIC_STRING_HPP
-#define RBOX_UTILS_DEFINE_STATIC_STRING_HPP
+#ifndef RBOX_UTILS_STDLIB_RANGES_VIEWS_SPLIT_HPP
+#define RBOX_UTILS_STDLIB_RANGES_VIEWS_SPLIT_HPP
 
-#include <rbox/type_traits/arithmetic_types.hpp>
-#include <rbox/utils/config.hpp>
-#include <rbox/utils/meta_string_view.hpp>
-#include <rbox/utils/stdlib/ranges/concepts.hpp>
+/**
+ * Minimal include for std::views::split.
+ */
 
-namespace rbox {
-template <std::ranges::input_range Range>
-    requires (char_type<std::ranges::range_value_t<Range>>)
-consteval auto define_static_string(Range&& range) /* -> meta_basic_string_view<CharT> */
-{
-    using CharT = std::ranges::range_value_t<Range>;
-    auto c_str = std::define_static_string(std::forward<Range>(range));
-    return meta_basic_string_view<CharT>(c_str);
-}
-}  // namespace rbox
+#if __has_include(<__ranges/split_view.h>)
+#include <__ranges/split_view.h>  // Clang libc++ (minimal)
+#else
+#include <ranges>  // GCC libstdc++ / Fallback
+#endif
 
-#endif  // RBOX_UTILS_DEFINE_STATIC_STRING_HPP
+#endif  // RBOX_UTILS_STDLIB_RANGES_VIEWS_SPLIT_HPP

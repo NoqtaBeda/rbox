@@ -24,7 +24,9 @@
 #define RBOX_UTILS_META_PAIR_HPP
 
 #include <rbox/utils/functional/tuple_comparison.hpp>
-#include <tuple>
+#include <rbox/utils/tuple_element.hpp>
+#include <rbox/utils/tuple_size.hpp>
+#include <type_traits>
 #include <utility>
 
 namespace rbox {

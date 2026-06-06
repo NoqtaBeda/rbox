@@ -23,11 +23,10 @@
 #ifndef RBOX_ENUM_ENUM_META_ENTRIES_HPP
 #define RBOX_ENUM_ENUM_META_ENTRIES_HPP
 
-#include <algorithm>
-#include <ranges>
 #include <rbox/enum/enum_count.hpp>
 #include <rbox/enum/enum_entry_order.hpp>
 #include <rbox/utils/concepts.hpp>
+#include <rbox/utils/stdlib/algorithm/sort.hpp>
 #include <utility>
 
 namespace rbox {
@@ -65,16 +64,21 @@ consteval auto make_enum_meta_entries_sorted_by_value()
     } else {
         using iv_pair_t = std::pair<size_t, std::underlying_type_t<E>>;
         auto iv_pairs = std::array<iv_pair_t, N>{};
+        auto* iv_pairs_data = iv_pairs.data();
+        auto* iv_pairs_data_end = iv_pairs_data + N;
         auto index = 0zU;
         template for (constexpr auto e : orig_order)
         {
-            iv_pairs[index] = {index, std::to_underlying([:e:])};
+            iv_pairs_data[index] = {index, std::to_underlying([:e:])};
             index += 1;
         }
-        std::ranges::sort(iv_pairs, {}, &iv_pair_t::second);
+        std::sort(iv_pairs_data, iv_pairs_data_end, [](const iv_pair_t& a, const iv_pair_t& b) {
+            return a.second < b.second;
+        });
         auto res = std::array<std::meta::info, N>{};
+        auto* res_data = res.data();
         for (auto i = 0zU; i < N; i++) {
-            res[i] = orig_order[iv_pairs[i].first];
+            res_data[i] = orig_order[iv_pairs_data[i].first];
         }
         return res;
     }
@@ -96,16 +100,21 @@ consteval auto make_enum_meta_entries_sorted_by_name()
     } else {
         using iv_pair_t = std::pair<size_t, std::string_view>;
         auto iv_pairs = std::array<iv_pair_t, N>{};
+        auto* iv_pairs_data = iv_pairs.data();
+        auto* iv_pairs_data_end = iv_pairs_data + N;
         auto index = 0zU;
         template for (constexpr auto e : orig_order)
         {
-            iv_pairs[index] = {index, std::meta::identifier_of(e)};
+            iv_pairs_data[index] = {index, std::meta::identifier_of(e)};
             index += 1;
         }
-        std::ranges::sort(iv_pairs, {}, &iv_pair_t::second);
+        std::sort(iv_pairs_data, iv_pairs_data_end, [](const auto& a, const auto& b) {
+            return a.second < b.second;
+        });
         auto res = std::array<std::meta::info, N>{};
+        auto* res_data = res.data();
         for (auto i = 0zU; i < N; i++) {
-            res[i] = orig_order[iv_pairs[i].first];
+            res_data[i] = orig_order[iv_pairs_data[i].first];
         }
         return res;
     }

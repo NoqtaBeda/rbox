@@ -20,23 +20,24 @@
  * SOFTWARE.
  **/
 
-#ifndef RBOX_UTILS_DEFINE_STATIC_STRING_HPP
-#define RBOX_UTILS_DEFINE_STATIC_STRING_HPP
+#ifndef RBOX_UTILS_STDLIB_ALGORITHM_RANGES_UNIQUE_HPP
+#define RBOX_UTILS_STDLIB_ALGORITHM_RANGES_UNIQUE_HPP
 
-#include <rbox/type_traits/arithmetic_types.hpp>
-#include <rbox/utils/config.hpp>
-#include <rbox/utils/meta_string_view.hpp>
-#include <rbox/utils/stdlib/ranges/concepts.hpp>
+/**
+ * Minimal include for std::ranges::unique.
+ *
+ *  - Clang (libc++):    <__algorithm/ranges_unique.h>
+ *  - GCC (libstdc++):   <bits/stl_algo.h> + <bits/ranges_algo.h>
+ *  - Fallback:          <algorithm>
+ */
 
-namespace rbox {
-template <std::ranges::input_range Range>
-    requires (char_type<std::ranges::range_value_t<Range>>)
-consteval auto define_static_string(Range&& range) /* -> meta_basic_string_view<CharT> */
-{
-    using CharT = std::ranges::range_value_t<Range>;
-    auto c_str = std::define_static_string(std::forward<Range>(range));
-    return meta_basic_string_view<CharT>(c_str);
-}
-}  // namespace rbox
+#if __has_include(<__algorithm/ranges_unique.h>)
+#include <__algorithm/ranges_unique.h>  // Clang libc++ (minimal)
+#elif __has_include(<bits/stl_algo.h>)
+#include <bits/ranges_algo.h>  // GCC: std::ranges::unique
+#include <bits/stl_algo.h>     // GCC: provides _Temporary_buffer
+#else
+#include <algorithm>  // Fallback
+#endif
 
-#endif  // RBOX_UTILS_DEFINE_STATIC_STRING_HPP
+#endif  // RBOX_UTILS_STDLIB_ALGORITHM_RANGES_UNIQUE_HPP

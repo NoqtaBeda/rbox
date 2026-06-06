@@ -23,11 +23,12 @@
 #ifndef RBOX_FIXED_MAP_INTEGRAL_KEY_HPP
 #define RBOX_FIXED_MAP_INTEGRAL_KEY_HPP
 
-#include <algorithm>
 #include <rbox/fixed_map/candidates/enum_wrapper.hpp>
 #include <rbox/fixed_map/candidates/integral_general.hpp>
 #include <rbox/to_static_storage.hpp>
 #include <rbox/type_traits/tuple_like_types.hpp>
+#include <rbox/utils/stdlib/algorithm/sort.hpp>
+#include <rbox/utils/tuple_element.hpp>
 
 namespace rbox {
 struct integral_key_fixed_map_options {
@@ -97,17 +98,21 @@ consteval auto make_with_ikey(
     std::vector<meta_pair<K, V>> kv_pairs, const integral_key_fixed_map_options& options)
     -> std::meta::info
 {
+    auto n = kv_pairs.size();
+    auto* kv_pairs_begin = kv_pairs.data();
+    auto* kv_pairs_end = kv_pairs_begin + n;
+
     // (1) Empty
     if (kv_pairs.empty()) {
         return make_empty_with_ikey<V>();
     }
     // Preprocessing & duplication check
     if (!options.already_sorted) {
-        std::ranges::sort(kv_pairs, {}, &meta_pair<K, V>::first);
+        auto compares_first_fn = [](const meta_pair<K, V>& a, const meta_pair<K, V>& b) {
+            return a.first < b.first;
+        };
+        std::sort(kv_pairs_begin, kv_pairs_end, compares_first_fn);
     }
-    auto n = kv_pairs.size();
-    const auto* kv_pairs_begin = kv_pairs.data();
-    const auto* kv_pairs_end = kv_pairs_begin + n;
 
     if (!options.already_unique && n >= 2) {
         for (const auto* it = kv_pairs_begin; it + 1 < kv_pairs_end; ++it) {
@@ -150,8 +155,8 @@ consteval auto make_integral_key_fixed_map(
     -> std::meta::info
 {
     using KVPair = std::ranges::range_value_t<KVPairRange>;
-    using K = std::tuple_element_t<0, KVPair>;
-    using V = std::tuple_element_t<1, KVPair>;
+    using K = rbox::tuple_element_t<0, KVPair>;
+    using V = rbox::tuple_element_t<1, KVPair>;
 
     if constexpr (std::is_enum_v<K>) {
         // (1) Enum key

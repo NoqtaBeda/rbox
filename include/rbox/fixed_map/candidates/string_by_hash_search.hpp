@@ -23,7 +23,6 @@
 #ifndef RBOX_FIXED_MAP_CANDIDATES_STRING_BY_HASH_SEARCH_HPP
 #define RBOX_FIXED_MAP_CANDIDATES_STRING_BY_HASH_SEARCH_HPP
 
-#include <algorithm>
 #include <optional>
 #include <rbox/fixed_map/candidates/string_empty.hpp>
 #include <rbox/fixed_map/impl/min_max_key_length.hpp>
@@ -33,6 +32,7 @@
 #include <rbox/utils/meta_span.hpp>
 #include <rbox/utils/meta_triple.hpp>
 #include <rbox/utils/meta_utility.hpp>
+#include <rbox/utils/stdlib/algorithm/sort.hpp>
 
 namespace rbox::impl::map {
 // Precondition: No hash collision
@@ -273,9 +273,11 @@ consteval auto make_binary_hash_search_with_skey(
         const auto& cur = kv_pairs_data[i];
         entries.push_back(meta_triple{hash_values_data[i], cur.first, cur.second});
     }
+    auto* entries_data = entries.data();
+
     // Sorts by hash value
-    std::ranges::sort(entries, {}, [](const raw_entry_type& entry) {
-        return entry.first;
+    std::sort(entries_data, entries_data + n, [](const raw_entry_type& a, const raw_entry_type& b) {
+        return a.first < b.first;
     });
 
     auto min_max_length = min_max_key_length(kv_pairs);

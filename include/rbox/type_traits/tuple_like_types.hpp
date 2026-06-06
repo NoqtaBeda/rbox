@@ -28,7 +28,8 @@
 #include <meta>
 #include <rbox/type_traits/type_comparison.hpp>
 #include <rbox/utils/config.hpp>
-#include <tuple>
+#include <rbox/utils/tuple_element.hpp>
+#include <rbox/utils/tuple_size.hpp>
 #include <utility>
 
 namespace rbox {
@@ -43,16 +44,16 @@ template <class T, size_t I>
 concept has_tuple_member_get_ith = requires (T t) {
     {
         t.template get<I>()
-    } -> same_as_without_cvref<std::tuple_element_t<I, T>>;
+    } -> same_as_without_cvref<rbox::tuple_element_t<I, T>>;
     {
         std::as_const(t).template get<I>()
-    } -> same_as_without_cvref<std::tuple_element_t<I, T>>;
+    } -> same_as_without_cvref<rbox::tuple_element_t<I, T>>;
     {
         std::move(t).template get<I>()
-    } -> same_as_without_cvref<std::tuple_element_t<I, T>>;
+    } -> same_as_without_cvref<rbox::tuple_element_t<I, T>>;
     {
         std::move(std::as_const(t)).template get<I>()
-    } -> same_as_without_cvref<std::tuple_element_t<I, T>>;
+    } -> same_as_without_cvref<rbox::tuple_element_t<I, T>>;
 };
 
 // get<I>(t) can be found via ADL.
@@ -60,16 +61,16 @@ template <class T, size_t I>
 concept has_tuple_free_get_ith = requires (T t) {
     {
         get<I>(t)
-    } -> same_as_without_cvref<std::tuple_element_t<I, T>>;
+    } -> same_as_without_cvref<rbox::tuple_element_t<I, T>>;
     {
         get<I>(std::as_const(t))
-    } -> same_as_without_cvref<std::tuple_element_t<I, T>>;
+    } -> same_as_without_cvref<rbox::tuple_element_t<I, T>>;
     {
         get<I>(std::move(t))
-    } -> same_as_without_cvref<std::tuple_element_t<I, T>>;
+    } -> same_as_without_cvref<rbox::tuple_element_t<I, T>>;
     {
         get<I>(std::move(std::as_const(t)))
-    } -> same_as_without_cvref<std::tuple_element_t<I, T>>;
+    } -> same_as_without_cvref<rbox::tuple_element_t<I, T>>;
 };
 // clang-format on
 
@@ -100,7 +101,7 @@ template <class T>
 concept tuple_like = impl::is_tuple_like(^^T);
 
 template <class T>
-concept pair_like = tuple_like<T> && std::tuple_size_v<std::remove_cv_t<T>> == 2;
+concept pair_like = tuple_like<T> && rbox::tuple_size_v<std::remove_cv_t<T>> == 2;
 
 namespace impl {
 consteval bool is_tuple_like_of_exactly(std::meta::info T, std::span<const std::meta::info> args)

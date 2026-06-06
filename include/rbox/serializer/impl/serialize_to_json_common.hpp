@@ -26,6 +26,7 @@
 #include <rbox/utils/indices_view.hpp>
 #include <rbox/utils/make_string_view.hpp>
 #include <rbox/utils/string_builder.hpp>
+#include <rbox/utils/tuple_size.hpp>
 
 namespace rbox::impl::json {
 template <class Derived>
@@ -117,7 +118,7 @@ struct indented_serializer_base {
         int indent_size,
         CharT indent_char)
     {
-        constexpr auto N = std::tuple_size_v<T>;
+        constexpr auto N = rbox::tuple_size_v<T>;
         dest.append_char('[');
         indent_level += indent_size;
 
@@ -195,7 +196,7 @@ struct unindented_serializer_base {
     template <class CharT, class Allocator, class T>
     static constexpr bool append_tuple(basic_string_builder<CharT, Allocator>& dest, const T& value)
     {
-        constexpr auto N = std::tuple_size_v<T>;
+        constexpr auto N = rbox::tuple_size_v<T>;
         dest.append_char('[');
 
         template for (constexpr auto I : rbox::indices_view{N})

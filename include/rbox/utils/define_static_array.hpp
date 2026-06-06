@@ -23,9 +23,9 @@
 #ifndef RBOX_UTILS_DEFINE_STATIC_ARRAY_HPP
 #define RBOX_UTILS_DEFINE_STATIC_ARRAY_HPP
 
-#include <ranges>
 #include <rbox/utils/config.hpp>
 #include <rbox/utils/meta_span.hpp>
+#include <rbox/utils/stdlib/ranges/concepts.hpp>
 
 namespace rbox {
 template <std::ranges::input_range Range>

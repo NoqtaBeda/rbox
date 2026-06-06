@@ -27,6 +27,8 @@
 #include <rbox/enum/impl/promoted.hpp>
 #include <rbox/fixed_map/integral_key.hpp>
 #include <rbox/utils/meta_string_view.hpp>
+#include <rbox/utils/stdlib/algorithm/stable_sort.hpp>
+#include <rbox/utils/stdlib/algorithm/unique.hpp>
 #include <utility>
 
 namespace rbox::impl {
@@ -34,20 +36,30 @@ template <class E>
 consteval auto make_enum_name_map_kv_pairs()
 {
     using kv_pair_t = std::pair<promoted_t<E>, meta_string_view>;
-    auto res = std::vector<kv_pair_t>{};
-    res.reserve(enum_count_v<E>);
+    auto n = enum_count_v<E>;
+    auto res = std::vector<kv_pair_t>(n);
+
+    auto* res_data = res.data();
+    auto* res_data_end = res_data + n;
 
     auto entries = std::meta::enumerators_of(^^E);
-    const auto& names = enum_names_v<E>;
-    for (auto i = 0zU, n = enum_count_v<E>; i < n; i++) {
-        auto ev = std::meta::extract<E>(entries[i]);
-        auto msv = meta_string_view(names[i]);
-        res.emplace_back(promoted(ev), msv);
+    const auto* entries_data = entries.data();
+    const auto* names_data = enum_names_v<E>.data();
+
+    for (auto i = 0zU; i < n; i++) {
+        auto ev = std::meta::extract<E>(entries_data[i]);
+        auto msv = meta_string_view(names_data[i]);
+        res_data[i] = {promoted(ev), msv};
     }
     // Original order is preserved for multiple entries with the same underlying value
-    std::ranges::stable_sort(res, {}, &kv_pair_t::first);
-    auto [dup_begin, dup_end] = std::ranges::unique(res, {}, &kv_pair_t::first);
-    res.erase(dup_begin, dup_end);
+    std::stable_sort(res_data, res_data_end, [](const kv_pair_t& a, const kv_pair_t& b) {
+        return a.first < b.first;
+    });
+    auto* dup_begin =
+        std::unique(res_data, res_data_end, [](const kv_pair_t& a, const kv_pair_t& b) {
+            return a.first == b.first;
+        });
+    res.resize(dup_begin - res_data);
     return res;
 }
 

@@ -24,9 +24,9 @@
 #define RBOX_TYPE_TRAITS_STRING_LIKE_TYPES_HPP
 
 #include <meta>
-#include <ranges>
 #include <rbox/type_traits/arithmetic_types.hpp>
 #include <rbox/utils/config.hpp>
+#include <rbox/utils/stdlib/ranges/concepts.hpp>
 #include <string_view>
 
 namespace rbox {

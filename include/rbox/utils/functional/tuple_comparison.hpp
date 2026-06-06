@@ -28,6 +28,7 @@
 #include <rbox/utils/functional/generic_comparison.hpp>
 #include <rbox/utils/functional/get_ith_element.hpp>
 #include <rbox/utils/indices_view.hpp>
+#include <rbox/utils/tuple_size.hpp>
 
 namespace rbox {
 // -------- Generic tuple-like comparison --------
@@ -86,7 +87,7 @@ struct elementwise_less_t {
         requires (is_elementwise_less_comparable_v<T, U>)
     static constexpr auto operator()(const T& t, const U& u) -> bool
     {
-        template for (constexpr auto I : rbox::indices_view{std::tuple_size_v<T>})
+        template for (constexpr auto I : rbox::indices_view{rbox::tuple_size_v<T>})
         {
             const auto& a = get_ith_element<I>(t);
             const auto& b = get_ith_element<I>(u);
@@ -108,7 +109,7 @@ struct elementwise_greater_t {
         requires (is_elementwise_greater_comparable_v<T, U>)
     static constexpr auto operator()(const T& t, const U& u) -> bool
     {
-        template for (constexpr auto I : rbox::indices_view{std::tuple_size_v<T>})
+        template for (constexpr auto I : rbox::indices_view{rbox::tuple_size_v<T>})
         {
             const auto& a = get_ith_element<I>(t);
             const auto& b = get_ith_element<I>(u);
@@ -127,7 +128,7 @@ struct elementwise_less_equal_t {
         requires (is_elementwise_less_equal_comparable_v<T, U>)
     static constexpr auto operator()(const T& t, const U& u) -> bool
     {
-        template for (constexpr auto I : rbox::indices_view{std::tuple_size_v<T>})
+        template for (constexpr auto I : rbox::indices_view{rbox::tuple_size_v<T>})
         {
             const auto& a = get_ith_element<I>(t);
             const auto& b = get_ith_element<I>(u);
@@ -147,7 +148,7 @@ struct elementwise_greater_equal_t {
         requires (is_elementwise_greater_equal_comparable_v<T, U>)
     static constexpr auto operator()(const T& t, const U& u) -> bool
     {
-        template for (constexpr auto I : rbox::indices_view{std::tuple_size_v<T>})
+        template for (constexpr auto I : rbox::indices_view{rbox::tuple_size_v<T>})
         {
             const auto& a = get_ith_element<I>(t);
             const auto& b = get_ith_element<I>(u);
@@ -169,7 +170,7 @@ struct elementwise_equal_t {
         requires (is_elementwise_equal_comparable_v<T, U>)
     static constexpr auto operator()(const T& t, const U& u) -> bool
     {
-        template for (constexpr auto I : rbox::indices_view{std::tuple_size_v<T>})
+        template for (constexpr auto I : rbox::indices_view{rbox::tuple_size_v<T>})
         {
             const auto& a = get_ith_element<I>(t);
             const auto& b = get_ith_element<I>(u);
@@ -190,7 +191,7 @@ struct elementwise_not_equal_t {
         requires (is_elementwise_not_equal_comparable_v<T, U>)
     static constexpr auto operator()(const T& t, const U& u) -> bool
     {
-        template for (constexpr auto I : rbox::indices_view{std::tuple_size_v<T>})
+        template for (constexpr auto I : rbox::indices_view{rbox::tuple_size_v<T>})
         {
             const auto& a = get_ith_element<I>(t);
             const auto& b = get_ith_element<I>(u);
@@ -211,7 +212,7 @@ struct elementwise_compare_three_way_t {
     static constexpr auto operator()(const T& t, const U& u)
         -> impl::elementwise_compare_3way_result_t<T, U>
     {
-        constexpr auto N = std::tuple_size_v<T>;
+        constexpr auto N = rbox::tuple_size_v<T>;
         template for (constexpr auto I : rbox::indices_view{N})
         {
             const auto& a = get_ith_element<I>(t);

@@ -25,6 +25,8 @@
 
 #include <rbox/utils/functional/tuple_comparison.hpp>
 #include <rbox/utils/meta_utility.hpp>
+#include <rbox/utils/tuple_element.hpp>
+#include <rbox/utils/tuple_size.hpp>
 
 namespace rbox {
 namespace impl {

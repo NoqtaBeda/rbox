@@ -31,6 +31,8 @@
 #include <rbox/utils/meta_span.hpp>
 #include <rbox/utils/meta_string_view.hpp>
 #include <rbox/utils/meta_utility.hpp>
+#include <rbox/utils/stdlib/algorithm/stable_sort.hpp>
+#include <rbox/utils/stdlib/algorithm/unique.hpp>
 
 namespace rbox::impl {
 template <class T>
@@ -106,17 +108,25 @@ consteval auto make_enum_flags_entries() /* -> std::vector<enum_flags_entry, U> 
 }
 
 template <class U>
-consteval auto try_decompose_regular_enum_flags_units(std::vector<enum_flags_entry<U>> entries)
+consteval auto try_decompose_regular_enum_flags_units(std::vector<enum_flags_entry<U>>& entries)
     -> std::optional<regular_enum_flags_units<U>>
 {
+    auto n = entries.size();
+    auto* entries_data = entries.data();
+    auto* entries_data_end = entries_data + n;
+
     // Entries with less popcount shall be traversed earlier
-    std::ranges::stable_sort(entries, {}, [](const auto& entry) {
-        return std::popcount(entry.underlying);
-    });
+    std::stable_sort(
+        entries_data,
+        entries_data_end,
+        [](const enum_flags_entry<U>& a, const enum_flags_entry<U>& b) {
+            return std::popcount(a.underlying) < std::popcount(b.underlying);
+        });
 
     auto full_set = U{0};
     auto units = std::vector<enum_flags_entry<U>>{};
-    for (const auto& e : entries) {
+    for (const auto* it = entries_data; it < entries_data_end; ++it) {
+        const auto& e = *it;
         if (e.underlying == 0) {
             continue;
         }
@@ -144,8 +154,14 @@ consteval auto try_decompose_regular_enum_flags_units(std::vector<enum_flags_ent
         }
         // assert(remaining == 0), otherwise the procedure halts at (1) above.
     }
+    auto* units_data = units.data();
+    auto* units_data_end = units_data + units.size();
+
     // Let s = a | b | c, then "s" has higher priority than "a | b | c" during conversion to string.
-    std::ranges::sort(units, greater, &enum_flags_entry<U>::underlying);
+    auto units_order_fn = [](const enum_flags_entry<U>& a, const enum_flags_entry<U>& b) {
+        return a.underlying > b.underlying;
+    };
+    std::stable_sort(units_data, units_data_end, units_order_fn);
     return regular_enum_flags_units<U>{
         .units = rbox::define_static_array(units),
         .full_set = full_set,
@@ -153,23 +169,35 @@ consteval auto try_decompose_regular_enum_flags_units(std::vector<enum_flags_ent
 }
 
 template <class U>
-consteval auto decompose_irregular_enum_flags_units(std::vector<enum_flags_entry<U>> entries)
+consteval auto decompose_irregular_enum_flags_units(std::vector<enum_flags_entry<U>>& entries)
     -> irregular_enum_flags_units<U>
 {
-    // i < j  <==>  entries[i].underlying > entries[j].underlying
-    std::ranges::stable_sort(entries, greater, &enum_flags_entry<U>::underlying);
-    auto [dup_begin, dup_end] = std::ranges::unique(entries, {}, &enum_flags_entry<U>::underlying);
-    entries.erase(dup_begin, dup_end);
-
     auto n = entries.size();
+    auto* entries_data = entries.data();
+
+    std::stable_sort(
+        entries_data,
+        entries_data + n,
+        [](const enum_flags_entry<U>& a, const enum_flags_entry<U>& b) {
+            return a.underlying > b.underlying;
+        });
+    auto* entries_data_end = std::unique(
+        entries_data,
+        entries_data + n,
+        [](const enum_flags_entry<U>& a, const enum_flags_entry<U>& b) {
+            return a.underlying == b.underlying;
+        });
+    n = static_cast<size_t>(entries_data_end - entries_data);
+    entries.resize(n);
+
     auto full_set = U{0};
     auto adjacency_list = std::vector<std::vector<size_t>>(n);
     // Adds an directed edge i -> j if entries[i] is superset of entries[j]
     for (auto i = 0zU; i < n - 1; i++) {
-        auto u = entries[i].underlying;
+        auto u = entries_data[i].underlying;
         full_set |= u;
         for (auto j = i + 1; j < n; j++) {
-            auto v = entries[j].underlying;
+            auto v = entries_data[j].underlying;
             if ((u & v) == v) {
                 adjacency_list[i].push_back(j);
             }

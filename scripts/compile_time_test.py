@@ -16,7 +16,6 @@ Options:
   --filter (or -f) REGEX: Sets the filter of targets to be tested.
                           A target is tested only if its name **fully matches** given regular expression.
                           All the available targets will be tested if this option is not set.
-  --num-workers (or -j) N: Enable multiprocessing with N worker processes.
   --output (or -o) FILE: Output the final testing result to given file.
                          The testing result is formatted as a table with 2 columns.
                          The first column has title "Build Target" and the second has "Compilation Time"
@@ -24,17 +23,24 @@ Options:
                          *.csv: Output as CSV format.
                          *.md:  Output as Markdown table (center-aligned).
                          The result table is written to stdout if this option is not set.
-    --verbose (or -v): Shows the detailed log message to stdout.
-    --help: Shows this document.
+  --pcores LIST: Pin all compiler processes to the given CPU cores (taskset format, e.g. "0-15" or "0,1,2,3").
+                 Mutually exclusive with --pin-to-pcores.
+  --pin-to-pcores: Auto-detect performance cores and pin compiler processes to them.
+                   Mutually exclusive with --pcores.
+  --verbose (or -v): Shows the detailed log message to stdout.
+  --help: Shows this document.
 '''
 
 import argparse
-import concurrent.futures
+import glob
 import os
 import re
 import subprocess
 import sys
 from typing import Optional
+
+# Module-level taskset prefix, set by main() based on --pcores / --pin-to-pcores.
+_TASKSET_PREFIX = ""
 
 
 def parse_args() -> argparse.Namespace:
@@ -72,12 +78,6 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
-        "--num-workers", "-j",
-        type=int,
-        default=1,
-        help="Number of parallel worker processes. Default: 1",
-    )
-    parser.add_argument(
         "--output", "-o",
         default=None,
         help=(
@@ -90,11 +90,31 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Show detailed log messages to stdout.",
     )
+    pcore_group = parser.add_mutually_exclusive_group()
+    pcore_group.add_argument(
+        "--pcores",
+        default=None,
+        help=(
+            "Pin compiler processes to the given CPU cores. "
+            "Accepts taskset-style list, e.g. \"0-15\" or \"0,1,2,3\". "
+            "Mutually exclusive with --pin-to-pcores."
+        ),
+    )
+    pcore_group.add_argument(
+        "--pin-to-pcores",
+        action="store_true",
+        help=(
+            "Auto-detect performance cores and pin compiler processes to them. "
+            "Mutually exclusive with --pcores."
+        ),
+    )
     return parser.parse_args()
 
 
 def run_cmd(cmd: str, cwd: Optional[str] = None, timeout: Optional[int] = None) -> subprocess.CompletedProcess:
     """Run a shell command and return the CompletedProcess."""
+    if _TASKSET_PREFIX:
+        cmd = f"{_TASKSET_PREFIX} {cmd}"
     return subprocess.run(
         cmd,
         shell=True,
@@ -165,7 +185,7 @@ def build_target_once(target: str, warmup: bool = False, verbose: bool = False) 
             print(f"[build] WARNING: clean failed for {target}")
 
     # Build
-    build_result = run_cmd(f"xmake build {"--verbose" if verbose else ""} {target}")
+    build_result = run_cmd(f"xmake build {'--verbose' if verbose else ''} {target}")
     if build_result.returncode != 0:
         if verbose:
             print(f"[build] ERROR: build failed for {target}:\n{build_result.stdout}{build_result.stderr}")
@@ -262,8 +282,103 @@ def format_table(results: list[tuple[str, Optional[float]]], fmt: str) -> str:
         return "\n".join(lines)
 
 
+def detect_pcores() -> Optional[str]:
+    """
+    Auto-detect performance cores and return a taskset-compatible CPU list.
+    Returns None if detection fails or the CPU does not have a hybrid architecture.
+    """
+    # Method 1: cpu_capacity (ARM big.LITTLE / Intel hybrid on newer kernels)
+    try:
+        capacities = []
+        for cpu_dir in sorted(glob.glob("/sys/devices/system/cpu/cpu[0-9]*")):
+            cap_file = os.path.join(cpu_dir, "cpu_capacity")
+            if os.path.exists(cap_file):
+                with open(cap_file) as f:
+                    cap = int(f.read().strip())
+                cpu_id = int(os.path.basename(cpu_dir)[3:])
+                capacities.append((cpu_id, cap))
+        if capacities:
+            max_cap = max(c[1] for c in capacities)
+            if max_cap > 0:
+                pcores = sorted(c[0] for c in capacities if c[1] == max_cap)
+                ecores = sorted(c[0] for c in capacities if c[1] != max_cap)
+                if ecores:
+                    return _cpu_list_to_taskset(pcores)
+    except Exception:
+        pass
+
+    # Method 2: lscpu -e (Intel Alder Lake+)
+    try:
+        result = subprocess.run(
+            "lscpu -e=CPU,MAXMHZ", shell=True, capture_output=True, text=True
+        )
+        freqs = []
+        for line in result.stdout.strip().split("\n")[1:]:
+            parts = line.split()
+            if len(parts) >= 2:
+                try:
+                    cpu = int(parts[0].strip())
+                    mhz = float(parts[1].strip())
+                    freqs.append((cpu, mhz))
+                except ValueError:
+                    continue
+        if freqs:
+            max_mhz = max(f[1] for f in freqs)
+            min_mhz = min(f[1] for f in freqs)
+            if max_mhz > min_mhz * 1.1:
+                pcores = sorted(c[0] for c in freqs if c[1] == max_mhz)
+                return _cpu_list_to_taskset(pcores)
+    except Exception:
+        pass
+
+    return None
+
+
+def _cpu_list_to_taskset(cpu_ids: list[int]) -> str:
+    """Convert a sorted list of CPU IDs to a compact taskset range string."""
+    if not cpu_ids:
+        return ""
+    ranges = []
+    start = cpu_ids[0]
+    end = cpu_ids[0]
+    for cpu in cpu_ids[1:]:
+        if cpu == end + 1:
+            end = cpu
+        else:
+            ranges.append(str(start) if start == end else f"{start}-{end}")
+            start = cpu
+            end = cpu
+    ranges.append(str(start) if start == end else f"{start}-{end}")
+    return ",".join(ranges)
+
+
 def main() -> None:
+    global _TASKSET_PREFIX
+
     args = parse_args()
+
+    # Resolve P-core pinning
+    if args.pin_to_pcores:
+        pcore_list = detect_pcores()
+        if pcore_list is None:
+            print("[pcores] ERROR: could not auto-detect performance cores.")
+            sys.exit(1)
+        print(f"[pcores] Auto-detected performance cores: {pcore_list}")
+    elif args.pcores:
+        pcore_list = args.pcores
+        print(f"[pcores] Using user-specified performance cores: {pcore_list}")
+    else:
+        pcore_list = None
+
+    if pcore_list:
+        # Verify taskset is available
+        check = subprocess.run(
+            "which taskset", shell=True, capture_output=True, text=True
+        )
+        if check.returncode != 0:
+            print("[pcores] ERROR: 'taskset' command not found.")
+            sys.exit(1)
+        _TASKSET_PREFIX = f"taskset -c {pcore_list}"
 
     # Step 1: configure
     configure_xmake(args)
@@ -284,33 +399,19 @@ def main() -> None:
             print("No targets matched the filter. Exiting.")
             sys.exit(1)
 
-    # Step 3: build each target (with optional parallelism)
+    # Sort targets alphabetically for consistent ordering
+    targets.sort()
+
+    # Step 3: build each target
     results: list[tuple[str, Optional[float]]] = []
 
-    if args.num_workers > 1:
-        with concurrent.futures.ProcessPoolExecutor(max_workers=args.num_workers) as executor:
-            futures = {
-                executor.submit(
-                    build_target_repeated, t, args.retry_count, True, args.verbose
-                ): t
-                for t in targets
-            }
-            for future in concurrent.futures.as_completed(futures):
-                try:
-                    name, avg = future.result()
-                    results.append((name, avg))
-                except Exception as e:
-                    name = futures[future]
-                    print(f"[build] {name}: unexpected error: {e}")
-                    results.append((name, None))
-    else:
-        for i, t in enumerate(targets):
-            if args.verbose:
-                print(f"\n[build] === Target {i+1}/{len(targets)}: {t} ===")
-            else:
-                print(f"[build] ({i+1}/{len(targets)}) {t}...", end=" ", flush=True)
-            name, avg = build_target_repeated(t, args.retry_count, verbose=args.verbose)
-            results.append((name, avg))
+    for i, t in enumerate(targets):
+        if args.verbose:
+            print(f"\n[build] === Target {i+1}/{len(targets)}: {t} ===")
+        else:
+            print(f"[build] ({i+1}/{len(targets)}) {t}...", end=" ", flush=True)
+        name, avg = build_target_repeated(t, args.retry_count, verbose=args.verbose)
+        results.append((name, avg))
 
     # Step 4: output
     if args.output:

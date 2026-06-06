@@ -9,6 +9,7 @@ Usage: python compile_time_comparison.py BEFORE AFTER
 
 import argparse
 import csv
+import re
 import sys
 
 
@@ -42,6 +43,15 @@ def parse_args() -> argparse.Namespace:
         "--colored", "-c",
         action="store_true",
         help="Color-code the speedup column with ANSI escape codes.",
+    )
+    parser.add_argument(
+        "--filter", "-f",
+        default=None,
+        help=(
+            "Regex filter for target names. "
+            "A target is compared only if its name fully matches the regex. "
+            "All common targets are compared if not set."
+        ),
     )
     return parser.parse_args()
 
@@ -232,6 +242,16 @@ def main() -> None:
     if not results:
         print("No common targets to compare.", file=sys.stderr)
         sys.exit(0)
+
+    # Apply filter if provided
+    if args.filter:
+        pattern = re.compile(args.filter)
+        filtered = [r for r in results if pattern.fullmatch(r["name"])]
+        print(f"[filter] '{args.filter}' matched {len(filtered)}/{len(results)} targets.")
+        results = filtered
+        if not results:
+            print("No targets matched the filter. Exiting.")
+            sys.exit(0)
 
     results = sort_results(results, args.sort_by)
 

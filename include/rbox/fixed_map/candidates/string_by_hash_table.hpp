@@ -23,7 +23,6 @@
 #ifndef RBOX_FIXED_MAP_CANDIDATES_STRING_BY_HASH_TABLE_HPP
 #define RBOX_FIXED_MAP_CANDIDATES_STRING_BY_HASH_TABLE_HPP
 
-#include <algorithm>
 #include <optional>
 #include <rbox/fixed_map/candidates/string_empty.hpp>
 #include <rbox/fixed_map/impl/common.hpp>

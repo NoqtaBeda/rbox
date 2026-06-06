@@ -27,6 +27,7 @@
 #include <rbox/enum/impl/enum_flags.hpp>
 #include <rbox/utils/concepts.hpp>
 #include <rbox/utils/functional/integral_comparison.hpp>
+#include <rbox/utils/stdlib/ranges/views/split.hpp>
 #include <rbox/utils/trim.hpp>
 
 namespace rbox {

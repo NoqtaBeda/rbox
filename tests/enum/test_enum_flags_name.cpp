@@ -22,6 +22,7 @@
 
 #include <climits>
 #include <list>
+#include <ranges>
 #include <rbox/enum/enum_bitwise_operators.hpp>
 #include <rbox/enum/enum_flags_name.hpp>
 #include <rbox/utils/string_builder.hpp>

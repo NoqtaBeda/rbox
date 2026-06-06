@@ -23,13 +23,14 @@
 #ifndef RBOX_LOOKUP_HPP
 #define RBOX_LOOKUP_HPP
 
-#include <algorithm>
 #include <rbox/fixed_map.hpp>
 #include <rbox/type_traits/class_types/flattened_nsdm.hpp>
 #include <rbox/type_traits/pointer_to_member.hpp>
 #include <rbox/type_traits/template_instance.hpp>
 #include <rbox/utils/addressable_member.hpp>
 #include <rbox/utils/meta_variant.hpp>
+#include <rbox/utils/stdlib/algorithm/sort.hpp>
+#include <rbox/utils/stdlib/algorithm/unique.hpp>
 
 namespace rbox {
 namespace impl::lookup {
@@ -234,10 +235,12 @@ consteval auto extract_types(const std::vector<std::meta::info>& members)
     for (auto i = 0zU, n = members.size(); i < n; i++) {
         types[i] = std::meta::remove_reference(std::meta::type_of(members[i]));
     }
-    std::ranges::sort(types, order_fn);
+    auto* types_data = types.data();
+    auto* types_data_end = types_data + types.size();
+    std::sort(types_data, types_data_end, order_fn);
 
-    auto [dup_begin, dup_end] = std::ranges::unique(types, equals_fn);
-    types.erase(dup_begin, dup_end);
+    const auto* dup_begin = std::unique(types_data, types_data_end, equals_fn);
+    types.resize(dup_begin - types_data);
     return types;
 }
 

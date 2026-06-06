@@ -50,5 +50,7 @@
 #include <rbox/utils/string_encoding.hpp>
 #include <rbox/utils/string_hash.hpp>
 #include <rbox/utils/trim.hpp>
+#include <rbox/utils/tuple_element.hpp>
+#include <rbox/utils/tuple_size.hpp>
 
 #endif  // RBOX_UTILS_HPP

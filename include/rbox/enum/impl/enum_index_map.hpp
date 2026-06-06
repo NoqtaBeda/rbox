@@ -26,6 +26,8 @@
 #include <rbox/enum/enum_names.hpp>
 #include <rbox/enum/impl/promoted.hpp>
 #include <rbox/fixed_map/integral_key.hpp>
+#include <rbox/utils/stdlib/algorithm/stable_sort.hpp>
+#include <rbox/utils/stdlib/algorithm/unique.hpp>
 #include <utility>
 
 namespace rbox::impl {
@@ -57,33 +59,52 @@ template <class E>
 consteval auto make_enum_index_map_kv_pairs()
 {
     using entry_tuple_t = std::pair<size_t, std::string_view>;
-    auto entries = std::meta::enumerators_of(^^E);
-    auto entry_tuples = std::vector<entry_tuple_t>{};
-    entry_tuples.reserve(entries.size());
-    for (auto i = 0zU, n = entries.size(); i < n; i++) {
-        entry_tuples.emplace_back(i, std::meta::identifier_of(entries[i]));
-    }
-
     using kv_pair_t = std::pair<promoted_t<E>, enum_indices_t>;
-    auto res = std::vector<kv_pair_t>{};
-    res.reserve(entries.size());
-    for (auto i = 0zU, n = entries.size(); i < n; i++) {
-        auto cur = entries[i];
-        res.emplace_back(
-            promoted(std::meta::extract<E>(cur)),
-            enum_indices_t{.original = static_cast<uint16_t>(i)});
+
+    auto entries = std::meta::enumerators_of(^^E);
+    auto n = entries.size();
+    const auto* entries_data = entries.data();
+    const auto* entries_data_end = entries_data + n;
+
+    auto entry_tuples = std::vector<entry_tuple_t>{};
+    entry_tuples.reserve(n);
+    for (auto i = 0zU; i < n; i++) {
+        entry_tuples.emplace_back(i, std::meta::identifier_of(entries_data[i]));
     }
-    std::ranges::sort(entry_tuples, {}, &entry_tuple_t::second);
-    for (auto i = 0zU, n = entries.size(); i < n; i++) {
-        res[entry_tuples[i].first].second.by_name = i;
+    auto* entry_tuples_data = entry_tuples.data();
+    auto* entry_tuples_data_end = entry_tuples_data + n;
+
+    auto res = std::vector<kv_pair_t>{};
+    res.reserve(n);
+    for (auto i = 0zU; i < n; i++) {
+        auto k = promoted(std::meta::extract<E>(entries_data[i]));
+        auto v = enum_indices_t{.original = static_cast<uint16_t>(i)};
+        res.emplace_back(k, v);
+    }
+    auto* res_data = res.data();
+    auto* res_data_end = res_data + n;
+
+    std::stable_sort(
+        entry_tuples_data,
+        entry_tuples_data_end,
+        [](const entry_tuple_t& a, const entry_tuple_t& b) {
+            return a.second < b.second;
+        });
+    for (auto i = 0zU; i < n; i++) {
+        res_data[entry_tuples_data[i].first].second.by_name = i;
     }
     // Original order is kept on underlying value duplication
-    std::ranges::stable_sort(res, {}, &kv_pair_t::first);
-    for (auto i = 0zU, n = entries.size(); i < n; i++) {
-        res[i].second.by_value = i;
+    std::stable_sort(res_data, res_data_end, [](const kv_pair_t& a, const kv_pair_t& b) {
+        return a.first < b.first;
+    });
+    for (auto i = 0zU; i < n; i++) {
+        res_data[i].second.by_value = i;
     }
-    auto [dup_begin, dup_end] = std::ranges::unique(res, {}, &kv_pair_t::first);
-    res.erase(dup_begin, dup_end);
+    auto* dup_begin =
+        std::unique(res_data, res_data_end, [](const kv_pair_t& a, const kv_pair_t& b) {
+            return a.first == b.first;
+        });
+    res.resize(dup_begin - res_data);
     for (auto i = 0zU, m = res.size(); i < m; i++) {
         res[i].second.by_value_unique = i;
     }

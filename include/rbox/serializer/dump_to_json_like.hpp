@@ -39,6 +39,7 @@
 #include <rbox/utils/functional/get_ith_alternative.hpp>
 #include <rbox/utils/indices_view.hpp>
 #include <rbox/utils/make_string_view.hpp>
+#include <rbox/utils/stdlib/algorithm/sort.hpp>
 #include <variant>
 
 namespace rbox {
@@ -60,19 +61,25 @@ consteval auto make_name_collision_table(std::span<const flattened_data_member_i
         auto name = std::meta::identifier_of(members[i].info);
         items.push_back({.name = name, .index = i});
     }
-    std::ranges::sort(items, {}, &field_name_item::name);
+    auto* items_data = items.data();
+    auto* items_data_end = items_data + n;
+    std::sort(items_data, items_data_end, [](const field_name_item& a, const field_name_item& b) {
+        return a.name < b.name;
+    });
 
     auto res = std::vector<uint8_t>(n);
+    auto* res_data = res.data();
+
     for (auto pos = 0zU; pos + 1 < n;) {
-        if (items[pos + 1].name != items[pos].name) {
+        if (items_data[pos + 1].name != items_data[pos].name) {
             pos += 1;
             continue;
         }
-        res[items[pos].index] = true;
-        res[items[pos + 1].index] = true;
+        res_data[items_data[pos].index] = true;
+        res_data[items_data[pos + 1].index] = true;
         auto next = pos + 2;
-        while (next < n && items[next].name == items[pos].name) {
-            res[items[next].index] = true;
+        while (next < n && items_data[next].name == items_data[pos].name) {
+            res_data[items_data[next].index] = true;
             next += 1;
         }
         pos = next;
