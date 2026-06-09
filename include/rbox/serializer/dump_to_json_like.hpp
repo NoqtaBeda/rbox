@@ -40,7 +40,6 @@
 #include <rbox/utils/indices_view.hpp>
 #include <rbox/utils/make_string_view.hpp>
 #include <rbox/utils/stdlib/algorithm/sort.hpp>
-#include <variant>
 
 namespace rbox {
 namespace impl::json {
@@ -315,7 +314,7 @@ constexpr void dumper_dispatch(
     } else if constexpr (template_instance_of<T, std::map>) {
         if constexpr (string_like<typename T::key_type>) {
             // (5.1) std::map<K, V> where K is string-like type: Serialized to JSON object
-            Parent::append_map(dest, value, args...);
+            Parent::append_string_key_map(dest, value, args...);
         } else {
             // (5.2.1) std::map<K, V> where K is not string-like type: Serialized to JSON nested
             // array

@@ -26,6 +26,7 @@
 #include <map>
 #include <optional>
 #include <rbox/enum/enum_contains.hpp>
+#include <rbox/enum/enum_flags_contains.hpp>
 #include <rbox/enum/enum_flags_name.hpp>
 #include <rbox/enum/enum_name.hpp>
 #include <rbox/serializer/impl/serialize_to_json_common.hpp>
@@ -36,7 +37,6 @@
 #include <rbox/utils/functional/get_ith_alternative.hpp>
 #include <rbox/utils/indices_view.hpp>
 #include <rbox/utils/make_string_view.hpp>
-#include <variant>
 
 namespace rbox {
 struct serialize_options {
@@ -53,13 +53,13 @@ struct serialize_options {
 
 namespace impl::json {
 template <bool ToString, class CharT, class Allocator, class T>
-static constexpr void serialize_char(basic_string_builder<CharT, Allocator>& dest, T value)
+constexpr void serialize_char(basic_string_builder<CharT, Allocator>& dest, T value)
 {
     if constexpr (ToString) {
+        auto code_point = static_cast<char32_t>(value);
         dest.reserve_at_least(8)
             .append_char_unsafe('"')
-            .template append_utf_code_point_by_unsafe<escaping_mode::json>(
-                static_cast<char32_t>(value))
+            .template append_utf_code_point_by_unsafe<escaping_mode::json>(code_point)
             .append_char_unsafe('"');
     } else {
         dest.append_integer(value);
@@ -67,27 +67,24 @@ static constexpr void serialize_char(basic_string_builder<CharT, Allocator>& des
 }
 
 template <bool HaltsOnInfOrNaN, class CharT, class Allocator, class T>
-static constexpr bool serialize_floating_point(
-    basic_string_builder<CharT, Allocator>& dest, T value)
+constexpr bool serialize_floating_point(basic_string_builder<CharT, Allocator>& dest, T value)
 {
-    if (std::isnan(value)) [[unlikely]] {
-        if constexpr (HaltsOnInfOrNaN) {
-            return false;
-        } else {
+    if (std::isfinite(value)) [[likely]] {
+        dest.append_floating_point(value);
+        return true;
+    }
+    if constexpr (!HaltsOnInfOrNaN) {
+        if (std::isnan(value)) {
             dest.append_c_string("\"NaN\"");
-        }
-    } else if (std::isinf(value)) [[unlikely]] {
-        if constexpr (HaltsOnInfOrNaN) {
-            return false;
         } else if (value > 0) {
             dest.append_c_string("\"Infinity\"");
         } else {
             dest.append_c_string("\"-Infinity\"");
         }
+        return true;
     } else {
-        dest.append_floating_point(value);
+        return false;
     }
-    return true;
 }
 
 template <bool HaltsOnInvalid, class CharT, class Allocator, class T>
@@ -166,7 +163,11 @@ constexpr bool serialize_enum(basic_string_builder<CharT, Allocator>& dest, T va
         }
     } else {
         if constexpr (HaltsOnInvalid) {
-            if (!enum_contains<T>(value)) return false;
+            if constexpr (enum_flag_type<T>) {
+                if (!enum_flags_contains<T>(value)) return false;
+            } else {
+                if (!enum_contains<T>(value)) return false;
+            }
         }
         dest.append_integer(std::to_underlying(value));
         return true;
@@ -252,7 +253,7 @@ constexpr bool serializer_dispatch(
     } else if constexpr (template_instance_of<T, std::map>) {
         if constexpr (string_like<typename T::key_type>) {
             // (5.1) std::map<K, V> where K is string-like type: Serialized to JSON object
-            return Parent::append_map(dest, value, args...);
+            return Parent::append_string_key_map(dest, value, args...);
         } else {
             // (5.2.1) std::map<K, V> where K is not string-like type: Serialized to JSON nested
             // array
@@ -304,8 +305,8 @@ struct indented_serializer : indented_serializer_base<indented_serializer<Option
 
         template for (constexpr auto I : rbox::indices_view{N})
         {
-            constexpr auto cur_member = members[I];
-            constexpr auto cur_member_name = std::meta::identifier_of(cur_member.info);
+            constexpr auto cur_member = members[I].info;
+            constexpr auto cur_member_name = std::meta::identifier_of(cur_member);
             constexpr auto is_ascii_only = is_ascii_string(cur_member_name);
             if constexpr (I > 0) {
                 auto s = indent_level + (is_ascii_only ? 1 : 4) * cur_member_name.length() + 6;
@@ -327,7 +328,7 @@ struct indented_serializer : indented_serializer_base<indented_serializer<Option
             }
             dest.append_c_string_unsafe("\": ");  // +3: '"', ':' and ' '
 
-            const auto& elem = value.[:cur_member.info:];
+            const auto& elem = value.[:cur_member:];
             if (!operator()(dest, elem, indent_level, indent_size, indent_char)) [[unlikely]] {
                 return false;
             }
@@ -363,8 +364,8 @@ struct unindented_serializer : unindented_serializer_base<unindented_serializer<
 
         template for (constexpr auto I : rbox::indices_view{N})
         {
-            constexpr auto cur_member = members[I];
-            constexpr auto cur_member_name = std::meta::identifier_of(cur_member.info);
+            constexpr auto cur_member = members[I].info;
+            constexpr auto cur_member_name = std::meta::identifier_of(cur_member);
             constexpr auto is_ascii_only = is_ascii_string(cur_member_name);
             if constexpr (I > 0) {
                 dest.reserve_at_least((is_ascii_only ? 1 : 4) * cur_member_name.length() + 4);
@@ -380,7 +381,7 @@ struct unindented_serializer : unindented_serializer_base<unindented_serializer<
             }
             dest.append_c_string_unsafe("\":");  // +2: '"' and ':'
 
-            const auto& elem = value.[:cur_member.info:];
+            const auto& elem = value.[:cur_member:];
             if (!operator()(dest, elem)) [[unlikely]] {
                 return false;
             }
@@ -433,17 +434,17 @@ constexpr auto serialize_to_json(
     int indent_size,
     CharT indent_char = static_cast<CharT>(' ')) /* -> (see below) */
 {
+    using dispatches_to = impl::json::indented_serializer<Options>;
+
     auto builder = basic_string_builder<CharT>{};
     if constexpr (Options.never_halts()) {
         // -> std::basic_string<CharT>
-        impl::json::indented_serializer<Options>::operator()(
-            builder, value, 0, indent_size, indent_char);
+        dispatches_to::operator()(builder, value, 0, indent_size, indent_char);
         return builder.str();
     } else {
         // -> std::optional<std::basic_string<CharT>>
         using Ret = std::optional<std::basic_string<CharT>>;
-        auto ok = impl::json::indented_serializer<Options>::operator()(
-            builder, value, 0, indent_size, indent_char);
+        auto ok = dispatches_to::operator()(builder, value, 0, indent_size, indent_char);
         if (ok) [[likely]] {
             return Ret{builder.str()};
         } else {

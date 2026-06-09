@@ -25,6 +25,7 @@
 
 #include <rbox/utils/indices_view.hpp>
 #include <rbox/utils/make_string_view.hpp>
+#include <rbox/utils/stdlib/ranges/concepts.hpp>
 #include <rbox/utils/string_builder.hpp>
 #include <rbox/utils/tuple_size.hpp>
 
@@ -43,7 +44,7 @@ struct indented_serializer_base {
         indent_level += indent_size;
         auto is_first = true;
 
-        using V = typename T::value_type;
+        using V = std::ranges::range_value_t<T>;
         for (const V& elem : value) {
             if (is_first) {
                 is_first = false;
@@ -56,8 +57,8 @@ struct indented_serializer_base {
                     .append_char_unsafe('\n')
                     .append_char_unsafe(indent_char, indent_level);
             }
-            if (!Derived::operator()(dest, elem, indent_level, indent_size, indent_char))
-                [[unlikely]] {
+            auto ok = Derived::operator()(dest, elem, indent_level, indent_size, indent_char);
+            if (!ok) [[unlikely]] {
                 return false;
             }
         }
@@ -70,7 +71,7 @@ struct indented_serializer_base {
     }
 
     template <class CharT, class Allocator, class T>
-    static constexpr bool append_map(
+    static constexpr bool append_string_key_map(
         basic_string_builder<CharT, Allocator>& dest,
         const T& value,
         int indent_level,
@@ -97,8 +98,9 @@ struct indented_serializer_base {
             dest.append_char_unsafe('"')  // +1
                 .template append_utf_string_by_unsafe<escaping_mode::json>(key_sv)
                 .append_c_string_unsafe("\": ");  // +3: '"', ':' and ' '
-            if (!Derived::operator()(dest, v, indent_level, indent_size, indent_char))
-                [[unlikely]] {
+
+            auto ok = Derived::operator()(dest, v, indent_level, indent_size, indent_char);
+            if (!ok) [[unlikely]] {
                 return false;
             }
         }
@@ -135,8 +137,8 @@ struct indented_serializer_base {
                     .append_char_unsafe(indent_char, indent_level);
             }
             const auto& elem = get_ith_element<I>(value);
-            if (!Derived::operator()(dest, elem, indent_level, indent_size, indent_char))
-                [[unlikely]] {
+            auto ok = Derived::operator()(dest, elem, indent_level, indent_size, indent_char);
+            if (!ok) [[unlikely]] {
                 return false;
             }
         }
@@ -157,7 +159,7 @@ struct unindented_serializer_base {
         dest.append_char('[');
         auto is_first = true;
 
-        using V = typename T::value_type;
+        using V = std::ranges::range_value_t<T>;
         for (const V& elem : value) {
             is_first ? (void)(is_first = false) : (void)(dest.append_char(','));
             if (!Derived::operator()(dest, elem)) [[unlikely]] {
@@ -169,7 +171,8 @@ struct unindented_serializer_base {
     }
 
     template <class CharT, class Allocator, class T>
-    static constexpr bool append_map(basic_string_builder<CharT, Allocator>& dest, const T& value)
+    static constexpr bool append_string_key_map(
+        basic_string_builder<CharT, Allocator>& dest, const T& value)
     {
         dest.append_char('{');
         auto is_first = true;
