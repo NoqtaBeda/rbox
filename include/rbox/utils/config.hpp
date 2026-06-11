@@ -23,21 +23,13 @@
 #ifndef RBOX_UTILS_CONFIG_HPP
 #define RBOX_UTILS_CONFIG_HPP
 
-#if __cplusplus
 #include <initializer_list>
-
-#if __has_include(<meta>)
-#include <meta>
-#else
-#error "<meta> for C++26 Reflection is missing!"
-#endif
 
 #define RBOX_IL(...)      \
     std::initializer_list \
     {                     \
         __VA_ARGS__       \
     }
-#endif  // __cplusplus
 
 #ifdef __clang__
 #define RBOX_ALWAYS_INLINE [[clang::always_inline]]
@@ -53,7 +45,6 @@
 #define RBOX_NO_INLINE
 #endif
 
-#if __cplusplus
 namespace rbox {
 [[noreturn]] int compile_error(const char* msg) noexcept;
 }  // namespace rbox
@@ -69,9 +60,5 @@ namespace rbox {
         RBOX_ERROR_IF_CONSTEVAL(msg); \
         __builtin_unreachable();      \
     } while (false)
-#else
-#define RBOX_ERROR_IF_CONSTEVAL(msg)  // No-op
-#define RBOX_UNREACHABLE(msg) __builtin_unreachable()
-#endif  // __cplusplus
 
 #endif  // RBOX_UTILS_CONFIG_HPP

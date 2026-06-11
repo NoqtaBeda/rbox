@@ -20,13 +20,16 @@
  * SOFTWARE.
  **/
 
+#include <format>
 #include <rbox/type_traits/trivial_types.hpp>
+#include <rbox/utils/format.hpp>
 #include <rbox/utils/meta_pair.hpp>
 #include <rbox/utils/meta_span.hpp>
 #include <rbox/utils/meta_string_view.hpp>
 #include <rbox/utils/meta_triple.hpp>
 #include <rbox/utils/meta_tuple.hpp>
 #include <rbox/utils/meta_variant.hpp>
+#include <string>
 
 #include "tests/test_options.hpp"
 
@@ -38,4 +41,32 @@ TEST(UtilsMetaAlternatives, IsTrivial)
     static_assert(rbox::trivial_type<rbox::meta_triple<int, int*, int**>>);
     static_assert(rbox::trivial_type<rbox::meta_tuple<int, int*, int**, int***>>);
     static_assert(rbox::trivial_type<rbox::meta_variant<int, int*, int**, int***>>);
+}
+
+TEST(UtilsMetaAlternatives, FormatMetaStringViewChar)
+{
+    auto sv = rbox::meta_string_view("hello");
+    auto result = std::format("{}", sv);
+    EXPECT_EQ(result, "hello");
+}
+
+TEST(UtilsMetaAlternatives, FormatMetaStringViewCharFillAlign)
+{
+    auto sv = rbox::meta_string_view("hi");
+    auto result = std::format("{:>6}", sv);
+    EXPECT_EQ(result, "    hi");
+}
+
+TEST(UtilsMetaAlternatives, FormatMetaStringViewWchar)
+{
+    auto sv = rbox::meta_basic_string_view<wchar_t>(L"world");
+    auto result = std::format(L"{}", sv);
+    EXPECT_EQ(result, L"world");
+}
+
+TEST(UtilsMetaAlternatives, FormatMetaStringViewWcharFillAlign)
+{
+    auto sv = rbox::meta_basic_string_view<wchar_t>(L"x");
+    auto result = std::format(L"{:*<4}", sv);
+    EXPECT_EQ(result, L"x***");
 }

@@ -48,7 +48,7 @@ consteval auto make_enum_name_map_kv_pairs()
 
     for (auto i = 0zU; i < n; i++) {
         auto ev = std::meta::extract<E>(entries_data[i]);
-        auto msv = meta_string_view(names_data[i]);
+        auto msv = meta_string_view(null_terminated, names_data[i]);
         res_data[i] = {promoted(ev), msv};
     }
     // Original order is preserved for multiple entries with the same underlying value

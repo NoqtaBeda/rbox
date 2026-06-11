@@ -38,15 +38,16 @@ struct meta_span {
     // Default construction
     constexpr meta_span() = default;
 
-    consteval meta_span(const T* head, size_t n);
-    consteval meta_span(const T* head, const T* tail);
+    // Constructors
+    constexpr meta_span(const T* head, size_t n);
+    constexpr meta_span(const T* head, const T* tail);
+    constexpr meta_span(std::initializer_list<T> il);
 
-    // consteval constructors
     template <size_t N>
-    consteval meta_span(const T (&arr)[N]);
+    constexpr meta_span(const T (&arr)[N]);
     template <size_t N>
-    consteval meta_span(const std::array<T, N>& arr);
-    consteval meta_span(std::span<const T> span);
+    constexpr meta_span(const std::array<T, N>& arr);
+    constexpr meta_span(std::span<const T> span);
 
     // Conversion to std::span
     constexpr operator std::span<const T>() const;

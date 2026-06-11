@@ -38,45 +38,6 @@ Detailed documentation for each component is available in the [`docs/`](docs/) d
 
 ## Quick Start
 
-### Enum Operations
-
-```cpp
-#include <print>
-#include <rbox/enum.hpp>
-
-enum class color_t { red, green, blue };
-
-enum class permissions_t : int {
-    read = 1,
-    write = 2,
-    execute = 4,
-};
-// operators: |, |=, &, &=, ^, ^=, ~
-RBOX_DEFINE_ENUM_BITWISE_OPERATORS(permissions_t)
-
-int main() {
-    // Enum value → name
-    std::println("color: {}", rbox::enum_name(color_t::red));  // "red"
-
-    // Name → enum value
-    auto c = rbox::enum_cast<color_t>("blue");     // std::optional, *c == color_t::blue
-    auto ci = *rbox::ascii_ci_enum_cast<color_t>("BLUE");  // color_t::blue
-
-    // Enum flag value → string
-    auto rw = permissions_t::read | permissions_t::write;
-    std::println("perms: {}", *rbox::enum_flags_name(rw));  // "read|write" (or "write|read")
-
-    // String → enum flag value
-    auto rwx = *rbox::enum_flags_cast<permissions_t>("read | write | execute");
-    // rwx == permissions_t::read | permissions_t::write | permissions_t::execute
-
-    // std::format support (requires <rbox/enum/enum_format.hpp>)
-    std::println("{}", color_t::green);  // "green"
-    std::println("{:F}", rwx);           // "read|write|execute" ('F' for enum flag)
-    std::println("{:F | }", rwx);        // "read | write | execute" ('F' + delimiter)
-}
-```
-
 ### Compile-time Fixed Map
 
 ```cpp
@@ -271,6 +232,45 @@ struct painter {
 };
 ```
 
+### Enum Operations
+
+```cpp
+#include <print>
+#include <rbox/enum.hpp>
+
+enum class color_t { red, green, blue };
+
+enum class permissions_t : int {
+    read = 1,
+    write = 2,
+    execute = 4,
+};
+// operators: |, |=, &, &=, ^, ^=, ~
+RBOX_DEFINE_ENUM_BITWISE_OPERATORS(permissions_t)
+
+int main() {
+    // Enum value → name
+    std::println("color: {}", rbox::enum_name(color_t::red));  // "red"
+
+    // Name → enum value
+    auto c = rbox::enum_cast<color_t>("blue");     // std::optional, *c == color_t::blue
+    auto ci = *rbox::ascii_ci_enum_cast<color_t>("BLUE");  // color_t::blue
+
+    // Enum flag value → string
+    auto rw = permissions_t::read | permissions_t::write;
+    std::println("perms: {}", *rbox::enum_flags_name(rw));  // "read|write" (or "write|read")
+
+    // String → enum flag value
+    auto rwx = *rbox::enum_flags_cast<permissions_t>("read | write | execute");
+    // rwx == permissions_t::read | permissions_t::write | permissions_t::execute
+
+    // std::format support (requires <rbox/enum/enum_format.hpp>)
+    std::println("{}", color_t::green);  // "green"
+    std::println("{:F}", rwx);           // "read|write|execute" ('F' for enum flag)
+    std::println("{:F | }", rwx);        // "read | write | execute" ('F' + delimiter)
+}
+```
+
 ### Serialization
 
 ```cpp
@@ -320,9 +320,37 @@ int main() {
 
 - **GCC 16.1** or later (with `-freflection` flag)
 
-## Build & Run
+## Using rbox in Your CMake Project
 
-`rbox` uses [XMake](https://xmake.io) as build system for unit tests.
+### Via `add_subdirectory` (recommended for git submodule)
+
+```shell
+git submodule add https://github.com/noqtabeda/rbox.git third_party/rbox
+```
+
+```cmake
+add_subdirectory(third_party/rbox)
+
+target_link_libraries(myapp PRIVATE rbox::rbox)          # header-only
+```
+
+### Via `FetchContent` (no pre-installation needed)
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+    rbox
+    GIT_REPOSITORY https://github.com/noqtabeda/rbox.git
+    GIT_TAG        main   # or a specific release tag, with format "release-vX.Y.Z"
+)
+FetchContent_MakeAvailable(rbox)
+
+target_link_libraries(myapp PRIVATE rbox::rbox)
+```
+
+## Build & Run Test Cases
+
+### With XMake
 
 ```shell
 # Configure (GCC 16)
@@ -335,8 +363,39 @@ xmake f -m debug \
 xmake run --group=tests/**
 
 # Run a specific test
-xmake run tests-utils-test_ctype
+xmake run tests-utils-test_utility
 ```
+
+Available CMake options:
+
+| Option        | Default | Description                                |
+| ------------- | ------- | ------------------------------------------ |
+| `static-test` | `false` | Enable compile-time static assertion tests |
+
+### With CMake
+
+```shell
+# Configure
+cmake -B build -G Ninja \
+      -DCMAKE_C_COMPILER=<gcc-root>/bin/gcc \
+      -DCMAKE_CXX_COMPILER=<gcc-root>/bin/g++ \
+      -DCMAKE_BUILD_TYPE=Debug
+
+# Build all targets
+cmake --build build -j$(nproc)
+
+# Run all tests
+ctest --test-dir build -j$(nproc)
+
+# Run a specific test
+ctest --test-dir build -R tests-utils-test_utility
+```
+
+Available CMake options:
+
+| Option             | Default | Description                                |
+| ------------------ | ------- | ------------------------------------------ |
+| `RBOX_STATIC_TEST` | `OFF`   | Enable compile-time static assertion tests |
 
 ## License
 

@@ -101,7 +101,7 @@ consteval auto make_enum_flags_entries() /* -> std::vector<enum_flags_entry, U> 
     for (auto i = 0zU; i < n; i++) {
         auto e = std::meta::extract<E>(entries[i]);
         auto u = unsigned_promoted(std::to_underlying(e));
-        auto name = meta_string_view(names[i]);
+        auto name = meta_string_view(null_terminated, names[i]);
         res.push_back({.underlying = u, .name = name});
     }
     return res;

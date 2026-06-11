@@ -40,7 +40,7 @@ consteval auto make_enum_from_string_kv_pairs()
     auto entries = std::meta::enumerators_of(^^E);
     for (auto i = 0zU, n = enum_count_v<E>; i < n; i++) {
         auto ev = std::meta::extract<E>(entries[i]);
-        auto msv = meta_string_view(enum_names_v<E>[i]);
+        auto msv = meta_string_view(null_terminated, enum_names_v<E>[i]);
         res.emplace_back(msv, promoted(ev));
     }
     return res;

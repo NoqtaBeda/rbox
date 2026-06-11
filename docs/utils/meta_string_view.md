@@ -19,6 +19,9 @@ A structural type is a type whose value can be used as a non-type template param
 ```cpp
 namespace rbox {
 
+struct null_terminated_tag_t {};
+constexpr auto null_terminated_tag = null_terminated_tag_t{};
+
 template <class CharT>
 struct meta_basic_string_view {
     using value_type = CharT;
@@ -38,13 +41,9 @@ struct meta_basic_string_view {
     // Default construction
     constexpr meta_basic_string_view() = default;
 
-    // consteval constructors (with compile-time trailing '\0' check)
-    consteval meta_basic_string_view(const CharT* literal);
-    template <size_t N>
-    consteval meta_basic_string_view(const CharT (&literal)[N]);
-    template <size_t N>
-    consteval meta_basic_string_view(const std::array<CharT, N>& arr);
-    consteval meta_basic_string_view(std::basic_string_view<CharT> sv);
+    // Constructors
+    constexpr meta_basic_string_view(const CharT* literal);
+    constexpr meta_basic_string_view(null_terminated_tag_t, std::basic_string_view<CharT> str);
 
     // Conversion to std::basic_string_view
     constexpr operator std::basic_string_view<CharT>() const;
@@ -68,7 +67,8 @@ struct meta_basic_string_view {
     constexpr auto cbegin() const -> const CharT*;
     constexpr auto cend() const -> const CharT*;
 
-    // Modification (returns new view)
+    // Modification (returns new view; remove_suffix is not provided
+    // because it would break the null-termination invariant)
     constexpr auto remove_prefix(size_t n) const -> meta_basic_string_view;
 
     // Comparison

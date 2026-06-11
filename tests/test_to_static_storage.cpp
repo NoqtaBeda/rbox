@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <numeric>
 #include <print>
+#include <ranges>
 #include <rbox/to_static_storage.hpp>
 
 #include "tests/test_options.hpp"

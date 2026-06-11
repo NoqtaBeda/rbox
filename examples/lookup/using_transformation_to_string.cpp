@@ -58,9 +58,9 @@ int main()
         // 3rd arg: Name transformer function
         // In this example, the transformer is a function object defined in
         // <rbox/utils/identifier_naming.hpp>
-        // with call signature: (std::string_view) -> std::optional<std::string>
+        // with call signature: (std::string_view) -> std::string
         // This function object converts the names to kebab-case.
-        rbox::to_kebab_case_opt
+        rbox::to_kebab_case
         // 4th arg (optional): Configuration of the underlying fixed map.
 
         // 5th arg (optional): Access context, std::meta::access_context::current() by default.

@@ -21,14 +21,15 @@
 add_rules("mode.debug", "mode.release")
 
 add_requires("gtest", {
-    config = { main = true }
+  config = { main = true }
 })
 
 -- Uses static assertion for supported unit test cases
-option("static-test")
+option("static-test", function()
   set_default(false)
   set_showmenu(true)
   add_defines("ENABLE_STATIC_TEST")
+end)
 
 function parse_test_case_path(path, group_prefix, path_prefix)
   local slash_pos = string.find(path, "/")
@@ -47,9 +48,9 @@ end
 
 function make_test_case(path)
   local group_name, target_name, cpp_path =
-    parse_test_case_path(path, "tests", "tests")
+      parse_test_case_path(path, "tests", "tests")
 
-  target(target_name, function ()
+  target(target_name, function()
     set_kind("binary")
     set_group(group_name)
     add_files(cpp_path)
@@ -62,9 +63,9 @@ end
 
 function make_example(path)
   local group_name, target_name, cpp_path =
-    parse_test_case_path(path, "examples", "examples")
+      parse_test_case_path(path, "examples", "examples")
 
-  target(target_name, function ()
+  target(target_name, function()
     set_kind("binary")
     set_group(group_name)
     add_files(cpp_path)
@@ -75,63 +76,70 @@ end
 
 -- Test cases: recursively glob all .cpp files under tests/, excluding blacklist.
 local test_blacklist = {
-    -- GCC 16.1 internal compiler error
-    "lookup/class_member/enum_key/test_custom_filter",
-    "lookup/class_member/string_key/test_special_members",
+  -- GCC 16.1 internal compiler error
+  "lookup/class_member/enum_key/test_custom_filter",
+  "lookup/class_member/string_key/test_special_members",
 }
-
-local function is_blacklisted(path, blacklist)
-    for _, bl in ipairs(blacklist) do
-        if path == bl then
-            return true
-        end
-    end
-    return false
-end
 
 local test_files = os.files("tests/**/*.cpp")
 for _, file in ipairs(test_files) do
-    -- Strip "tests/" prefix and ".cpp" suffix to recover the logical path
-    local path = string.sub(file, 7, -5)
-    if not is_blacklisted(path, test_blacklist) then
-        make_test_case(path)
+  -- Strip "tests/" prefix and ".cpp" suffix to recover the logical path
+  local path = string.sub(file, 7, -5)
+
+  local is_blacklisted = false
+  for _, bl in ipairs(test_blacklist) do
+    if path == bl then
+      is_blacklisted = true
+      break
     end
+  end
+  if not is_blacklisted then
+    make_test_case(path)
+  end
 end
 
 -- Examples: recursively glob all .cpp files under examples/.
 local example_files = os.files("examples/**/*.cpp")
 for _, file in ipairs(example_files) do
-    local path = string.sub(file, 10, -5)  -- strip "examples/" and ".cpp"
-    make_example(path)
+  local path = string.sub(file, 10, -5) -- strip "examples/" and ".cpp"
+  make_example(path)
 end
 
-target("benchmarks-enum-enum_name", function ()
+target("benchmarks-enum-enum_name", function()
   set_kind("binary")
-  add_files("benchmarks/enum/enum_name.cpp",
-            "benchmarks/enum/helpers/consume_output.cpp")
+  add_files(
+    "benchmarks/enum/enum_name.cpp",
+    "benchmarks/enum/helpers/consume_output.cpp")
   set_languages("c++26")
   add_includedirs("include")
 end)
 
-target("benchmarks-enum-enum_cast", function ()
+target("benchmarks-enum-enum_cast", function()
   set_kind("binary")
-  add_files("benchmarks/enum/enum_cast.cpp",
-            "benchmarks/enum/helpers/consume_output.cpp")
+  add_files(
+    "benchmarks/enum/enum_cast.cpp",
+    "benchmarks/enum/helpers/consume_output.cpp")
   set_languages("c++26")
   add_includedirs("include")
 end)
+
+function make_compile_benchmark(path)
+  local target_name = "benchmarks-compile-" .. string.gsub(path, "/", "-")
+
+  target(target_name, function()
+    set_kind("shared")
+    add_files("benchmarks/compile/" .. path .. ".cpp")
+    set_languages("c++26")
+    add_includedirs("include")
+    add_cxxflags("visibility=hidden")
+  end)
+end
 
 -- Benchmarks to test compilation speed
 local benchmark_compile_files = os.files("benchmarks/compile/fixed_map/**/*.cpp")
 for _, file in ipairs(benchmark_compile_files) do
-    local rel = string.gsub(file, "^benchmarks/compile/", "")
-    local name = string.gsub(rel, "/", "-")
-    name = string.gsub(name, "%.cpp$", "")
-    target("benchmarks-compile-" .. name, function ()
-        set_kind("shared")
-        add_files(file)
-        set_languages("c++26")
-        add_includedirs("include")
-        add_cxxflags("visibility=hidden", "-fconstexpr-ops-limit=134217728")
-    end)
+  local rel = string.gsub(file, "^benchmarks/compile/", "")
+  local path = string.gsub(rel, "%.cpp$", "")
+
+  make_compile_benchmark(path)
 end

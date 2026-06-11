@@ -30,36 +30,46 @@
 #include <fmt/format.h>
 #endif
 
-template <class CharT>
-struct std::formatter<rbox::meta_basic_string_view<CharT>, CharT>
-    : std::formatter<std::basic_string_view<CharT>, CharT> {
-    using self_type = rbox::meta_basic_string_view<CharT>;
-
+template <>
+struct std::formatter<rbox::meta_string_view, char> : std::formatter<std::string_view, char> {
     template <class FormatContext>
-    auto format(self_type str, FormatContext& ctx) const -> FormatContext::iterator
+    auto format(rbox::meta_string_view str, FormatContext& ctx) const -> FormatContext::iterator
     {
-        const auto* end = str.head + str.n;
-        for (const auto* p = str.head; p < end; ++p) {
-            *out++ = *p;
-        }
-        return out;
+        return std::formatter<std::string_view, char>::format(
+            std::string_view(str.head, str.n), ctx);
+    }
+};
+
+template <>
+struct std::formatter<rbox::meta_wstring_view, wchar_t>
+    : std::formatter<std::wstring_view, wchar_t> {
+    template <class FormatContext>
+    auto format(rbox::meta_wstring_view str, FormatContext& ctx) const -> FormatContext::iterator
+    {
+        return std::formatter<std::wstring_view, wchar_t>::format(
+            std::wstring_view(str.head, str.n), ctx);
     }
 };
 
 #if __has_include(<fmt/format.h>)
-template <class CharT>
-struct fmt::formatter<rbox::meta_basic_string_view<CharT>, CharT>
-    : fmt::formatter<std::basic_string_view<CharT>, CharT> {
-    using self_type = rbox::meta_basic_string_view<CharT>;
-
+template <>
+struct fmt::formatter<rbox::meta_string_view, char> : fmt::formatter<std::string_view, char> {
     template <class FormatContext>
-    auto format(self_type str, FormatContext& ctx) const -> FormatContext::iterator
+    auto format(rbox::meta_string_view str, FormatContext& ctx) const -> FormatContext::iterator
     {
-        const auto* end = str.head + str.n;
-        for (const auto* p = str.head; p < end; ++p) {
-            *out++ = *p;
-        }
-        return out;
+        return fmt::formatter<std::string_view, char>::format(
+            std::string_view(str.head, str.n), ctx);
+    }
+};
+
+template <>
+struct fmt::formatter<rbox::meta_wstring_view, wchar_t>
+    : fmt::formatter<std::wstring_view, wchar_t> {
+    template <class FormatContext>
+    auto format(rbox::meta_wstring_view str, FormatContext& ctx) const -> FormatContext::iterator
+    {
+        return fmt::formatter<std::wstring_view, wchar_t>::format(
+            std::wstring_view(str.head, str.n), ctx);
     }
 };
 #endif

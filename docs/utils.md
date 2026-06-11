@@ -8,12 +8,16 @@ rbox contains a series of utility components for various usages. They were initi
 
 ### Structural Alternative Types
 
-* [meta_pair](utils/meta_pair.md): Structural alternative to `std::pair<T, U>`
 * [meta_span](utils/meta_span.md): Structural alternative to `std::span`
 * [meta_string_view](utils/meta_string_view.md): Structural alternative to `std::basic_string_view`
+* [meta_pair](utils/meta_pair.md): Structural alternative to `std::pair<T, U>`
 * [meta_triple](utils/meta_triple.md): Structural alternative to `std::tuple<T, U, V>`
 * [meta_tuple](utils/meta_tuple.md): Structural alternative to `std::tuple<Args...>`
 * [meta_variant](utils/meta_variant.md): Multi-type container variant
+
+Along with:
+
+* [format](utils/format.md): `std::format` and `fmt::format` support for `meta_basic_string_view`
 
 ### Helper Utility Types
 * [ref_variant](utils/ref_variant.md): Non-owning variant of references
@@ -21,21 +25,20 @@ rbox contains a series of utility components for various usages. They were initi
 ### String & Encoding
 
 * [bkdr_hash](utils/string_hash/bkdr_hash.md): String hash with BKDR algorithm
-* [ctype](utils/ctype.md): ASCII character predicates & case conversion helpers
-* [format](utils/format.md): `std::format` and `fmt::format` support for `meta_basic_string_view`
-* [identifier_naming](utils/identifier_naming.md): Identifier name conversion
 * [make_string_view](utils/make_string_view.md): Generic, `nullptr`-safe construction to `std::basic_string_view` from ranges or C-style string
+* [ctype](utils/ctype.md): ASCII character predicates & case conversion helpers
+* [trim](utils/trim.md): ASCII whitespace trimming
+* [identifier_naming](utils/identifier_naming.md): Identifier name conversion
 * [string_builder](utils/string_builder.md): String builder with `constexpr` support
 * [string_encoding](utils/string_encoding.md): UTF conversion with `constexpr` support
-* [trim](utils/trim.md): ASCII whitespace trimming
 
 ### Functional
 
 * [generic_comparison](utils/functional/generic_comparison.md): Extension to `std::less` etc.
-* [get_ith_alternative](utils/functional/get_ith_alternative.md): Variant-like access
-* [get_ith_element](utils/functional/get_ith_element.md): Tuple-like access
 * [integral_comparison](utils/functional/integral_comparison.md): Extension to `std::cmp_less` etc.
 * [tuple_comparison](utils/functional/tuple_comparison.md): Tuple-like elementwise comparison
+* [get_ith_alternative](utils/functional/get_ith_alternative.md): Variant-like access
+* [get_ith_element](utils/functional/get_ith_element.md): Tuple-like access
 
 ### Type Traits & Concepts
 

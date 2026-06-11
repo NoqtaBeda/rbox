@@ -178,6 +178,15 @@ consteval auto make_integral_key_fixed_map(
         return impl::map::make_with_ikey(std::move(converted), options);
     }
 }
+
+template <impl::map::kv_pair_with_ikey KVPair>
+consteval auto make_integral_key_fixed_map(
+    std::initializer_list<KVPair> kv_pairs, const integral_key_fixed_map_options& options = {})
+    -> std::meta::info
+{
+    auto as_span = meta_span(kv_pairs.begin(), kv_pairs.size());
+    return make_integral_key_fixed_map(as_span, options);
+}
 }  // namespace rbox
 
 #define RBOX_INTEGRAL_KEY_FIXED_MAP(kv_pairs, ...) \

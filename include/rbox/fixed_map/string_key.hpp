@@ -180,6 +180,15 @@ consteval auto make_string_key_fixed_map(
     }
     return impl::map::make_with_skey(std::move(converted), options);
 }
+
+template <impl::map::kv_pair_with_skey KVPair>
+consteval auto make_string_key_fixed_map(
+    std::initializer_list<KVPair> kv_pairs, const string_key_fixed_map_options& options = {})
+    -> std::meta::info
+{
+    auto as_span = meta_span(kv_pairs.begin(), kv_pairs.size());
+    return make_string_key_fixed_map(as_span, options);
+}
 }  // namespace rbox
 
 #define RBOX_STRING_KEY_FIXED_MAP(kv_pairs, ...) \

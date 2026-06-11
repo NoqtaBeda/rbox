@@ -46,20 +46,18 @@ struct meta_span {
     // Trivial construction
     constexpr meta_span() = default;
 
-    consteval meta_span(const T* head, size_t n) : head(head), n(n) {}
-    consteval meta_span(const T* head, const T* tail) : head(head), n(tail - head) {}
+    constexpr meta_span(const T* head, size_t n) : head(head), n(n) {}
+    constexpr meta_span(const T* head, const T* tail) : head(head), n(tail - head) {}
+
+    // clang-format off
+    template <size_t N>
+    constexpr meta_span(const T (&arr)[N]) : head(arr), n(N) {}
 
     template <size_t N>
-    consteval meta_span(const T (&arr)[N]) : head(arr), n(N)
-    {
-    }
+    constexpr meta_span(const std::array<T, N>& arr) : head(arr.data()), n(N) {}
+    // clang-format on
 
-    template <size_t N>
-    consteval meta_span(const std::array<T, N>& arr) : head(arr.data()), n(N)
-    {
-    }
-
-    consteval meta_span(std::span<const T> span) : head(span.data()), n(span.size()) {}
+    constexpr meta_span(std::span<const T> span) : head(span.data()), n(span.size()) {}
 
     constexpr operator std::span<const T>() const
     {

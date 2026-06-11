@@ -29,6 +29,9 @@
 #include <string_view>
 
 namespace rbox {
+struct null_terminated_tag_t {};
+constexpr auto null_terminated = null_terminated_tag_t{};
+
 template <class CharT>
 struct meta_basic_string_view {
     using value_type = CharT;
@@ -47,40 +50,17 @@ struct meta_basic_string_view {
     // Trivial construction
     constexpr meta_basic_string_view() = default;
 
-    consteval meta_basic_string_view(const CharT* literal) : head(literal)
+    constexpr meta_basic_string_view(const CharT* literal) : head(literal)
     {
-        if (literal == nullptr) {
-            compile_error("String literal must not be null pointer.");
-        }
         const auto* tail = literal;
         while (*tail != '\0') ++tail;
         n = static_cast<size_t>(tail - literal);
     }
 
-    template <size_t N>
-    consteval meta_basic_string_view(const CharT (&literal)[N])
-        : meta_basic_string_view(static_cast<const CharT*>(literal))
+    constexpr meta_basic_string_view(null_terminated_tag_t, std::basic_string_view<CharT> str)
     {
-        if (literal[N - 1] != '\0') {
-            compile_error("String literal must be null-terminated.");
-        }
-    }
-
-    template <size_t N>
-    consteval meta_basic_string_view(const std::array<CharT, N>& arr)
-        : meta_basic_string_view(arr.data())
-    {
-        if (arr[N - 1] != '\0') {
-            compile_error("String literal must be null-terminated.");
-        }
-    }
-
-    consteval meta_basic_string_view(std::basic_string_view<CharT> sv)
-        : meta_basic_string_view(sv.data())
-    {
-        if (*sv.end() != '\0') {
-            compile_error("String literal must be null-terminated.");
-        }
+        head = str.data();
+        n = str.size();
     }
 
     // Implicit conversion to std::string_view
