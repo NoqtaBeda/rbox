@@ -36,33 +36,34 @@ struct to_snake_case_t {
     // (1.1) Convert, treating non-alpha characters as lowercase
     template <string_like StringLike>
     static constexpr auto operator()(const StringLike& identifier)
-        /* -> std::basic_string<CharT> */;
+        -> std::basic_string</* ... */>;
 
-    // (1.2) Convert with explicit non-alpha treatment tag (lower)
+    // (1.2) Convert with explicit non-alpha treatment tag (as lowercase)
     template <string_like StringLike>
     static constexpr auto operator()(
         non_alpha_as_lower_tag_t tag, const StringLike& identifier)
-        /* -> std::basic_string<CharT> */;
+        -> std::basic_string</* ... */>;
 
-    // (1.3) Convert with explicit non-alpha treatment tag (upper)
+    // (1.3) Convert with explicit non-alpha treatment tag (as uppercase)
     template <string_like StringLike>
     static constexpr auto operator()(
         non_alpha_as_upper_tag_t tag, const StringLike& identifier)
-        /* -> std::basic_string<CharT> */;
+        -> std::basic_string</* ... */>;
 
     // (1.4) Convert from pointer + length, treating non-alpha as lowercase
     template <char_type CharT>
-    static constexpr auto operator()(const CharT* identifier, const CharT* identifier_end)
+    static constexpr auto operator()(
+        const CharT* identifier, const CharT* identifier_end)
         -> std::basic_string<CharT>;
 
-    // (1.5) Convert from pointer + length with explicit tag
+    // (1.5) Convert from pointer + length with explicit tag (as lowercase)
     template <char_type CharT>
     static constexpr auto operator()(
         non_alpha_as_lower_tag_t tag,
         const CharT* identifier,
         const CharT* identifier_end) -> std::basic_string<CharT>;
 
-    // (1.6) Convert from pointer + length with explicit tag
+    // (1.6) Convert from pointer + length with explicit tag (as uppercase)
     template <char_type CharT>
     static constexpr auto operator()(
         non_alpha_as_upper_tag_t tag,
@@ -80,19 +81,46 @@ struct to_upper_camel_snake_case_t { /* same interface as above */ };
 struct to_http_header_case_t { /* same interface as above */ };
 
 // Variable templates
-inline constexpr auto to_snake_case = to_snake_case_t{};
-inline constexpr auto to_all_caps_snake_case = to_all_caps_snake_case_t{};
-inline constexpr auto to_kebab_case = to_kebab_case_t{};
-inline constexpr auto to_all_caps_kebab_case = to_all_caps_kebab_case_t{};
-inline constexpr auto to_lower_camel_case = to_lower_camel_case_t{};
-inline constexpr auto to_upper_camel_case = to_upper_camel_case_t{};
-inline constexpr auto to_lower_camel_snake_case = to_lower_camel_snake_case_t{};
-inline constexpr auto to_upper_camel_snake_case = to_upper_camel_snake_case_t{};
-inline constexpr auto to_http_header_case = to_http_header_case_t{};
+constexpr auto to_snake_case = to_snake_case_t{};
+constexpr auto to_all_caps_snake_case = to_all_caps_snake_case_t{};
+constexpr auto to_kebab_case = to_kebab_case_t{};
+constexpr auto to_all_caps_kebab_case = to_all_caps_kebab_case_t{};
+constexpr auto to_lower_camel_case = to_lower_camel_case_t{};
+constexpr auto to_upper_camel_case = to_upper_camel_case_t{};
+constexpr auto to_lower_camel_snake_case = to_lower_camel_snake_case_t{};
+constexpr auto to_upper_camel_snake_case = to_upper_camel_snake_case_t{};
+constexpr auto to_http_header_case = to_http_header_case_t{};
 
 // (2) Runtime dispatcher
 struct convert_identifier_t {
-    // (2.1) Convert with explicit tag, pointer + length, and naming rule
+    // (2.1) Convert string-like with naming rule (default tag)
+    template <string_like StringLike>
+    static constexpr auto operator()(
+        const StringLike& identifier,
+        identifier_naming_rule naming_rule) -> std::basic_string</* ... */>;
+
+    // (2.2) Convert string-like with explicit tag and naming rule (lower)
+    template <string_like StringLike>
+    static constexpr auto operator()(
+        non_alpha_as_lower_tag_t tag,
+        const StringLike& identifier,
+        identifier_naming_rule naming_rule) -> std::basic_string</* ... */>;
+
+    // (2.3) Convert string-like with explicit tag and naming rule (upper)
+    template <string_like StringLike>
+    static constexpr auto operator()(
+        non_alpha_as_upper_tag_t tag,
+        const StringLike& identifier,
+        identifier_naming_rule naming_rule) -> std::basic_string</* ... */>;
+
+    // (2.4) Convert pointer + length with naming rule (default tag)
+    template <char_type CharT>
+    static constexpr auto operator()(
+        const CharT* identifier,
+        const CharT* identifier_end,
+        identifier_naming_rule naming_rule) -> std::basic_string<CharT>;
+
+    // (2.5) Convert pointer + length with explicit tag and naming rule (lower)
     template <char_type CharT>
     static constexpr auto operator()(
         non_alpha_as_lower_tag_t tag,
@@ -100,25 +128,13 @@ struct convert_identifier_t {
         const CharT* identifier_end,
         identifier_naming_rule naming_rule) -> std::basic_string<CharT>;
 
-    // (2.2) Convert string-like with explicit tag and naming rule
-    template <string_like StringLike>
-    static constexpr auto operator()(
-        non_alpha_as_lower_tag_t tag,
-        const StringLike& identifier,
-        identifier_naming_rule naming_rule) /* -> std::basic_string_view<CharT> */;
-
-    // (2.3) Convert pointer + length with naming rule (default tag)
+    // (2.6) Convert pointer + length with explicit tag and naming rule (upper)
     template <char_type CharT>
     static constexpr auto operator()(
+        non_alpha_as_upper_tag_t tag,
         const CharT* identifier,
         const CharT* identifier_end,
         identifier_naming_rule naming_rule) -> std::basic_string<CharT>;
-
-    // (2.4) Convert string-like with naming rule (default tag)
-    template <string_like StringLike>
-    static constexpr auto operator()(
-        const StringLike& identifier,
-        identifier_naming_rule naming_rule) /* -> std::basic_string_view<CharT> */;
 };
 
 constexpr auto convert_identifier = convert_identifier_t{};

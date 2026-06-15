@@ -81,7 +81,7 @@ local test_blacklist = {
   "lookup/class_member/string_key/test_special_members",
 }
 
-local test_files = os.files("tests/**/*.cpp")
+local test_files = os.files("tests/**.cpp")
 for _, file in ipairs(test_files) do
   -- Strip "tests/" prefix and ".cpp" suffix to recover the logical path
   local path = string.sub(file, 7, -5)
@@ -99,7 +99,7 @@ for _, file in ipairs(test_files) do
 end
 
 -- Examples: recursively glob all .cpp files under examples/.
-local example_files = os.files("examples/**/*.cpp")
+local example_files = os.files("examples/**.cpp")
 for _, file in ipairs(example_files) do
   local path = string.sub(file, 10, -5) -- strip "examples/" and ".cpp"
   make_example(path)
@@ -136,7 +136,7 @@ function make_compile_benchmark(path)
 end
 
 -- Benchmarks to test compilation speed
-local benchmark_compile_files = os.files("benchmarks/compile/fixed_map/**/*.cpp")
+local benchmark_compile_files = os.files("benchmarks/compile/fixed_map/**.cpp")
 for _, file in ipairs(benchmark_compile_files) do
   local rel = string.gsub(file, "^benchmarks/compile/", "")
   local path = string.gsub(rel, "%.cpp$", "")

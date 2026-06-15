@@ -24,6 +24,7 @@
 #define RBOX_TO_STATIC_STORAGE_HPP
 
 #include <rbox/type_traits/arithmetic_types.hpp>
+#include <rbox/type_traits/class_types/flattened_nsdm.hpp>
 #include <rbox/type_traits/trivial_types.hpp>
 #include <rbox/type_traits/tuple_like_types.hpp>
 #include <rbox/type_traits/variant_like_types.hpp>
@@ -40,11 +41,13 @@
 
 namespace rbox {
 namespace impl {
-consteval bool is_promotable_to_static_storage(std::meta::info T);
+consteval auto is_promotable_to_static_storage(std::meta::info T) -> bool;
+consteval auto make_structural_mirror_members(std::meta::info T) -> std::vector<std::meta::info>;
 }  // namespace impl
 
 template <class T>
-concept promotable_to_static_storage = impl::is_promotable_to_static_storage(^^T);
+concept promotable_to_static_storage =
+    impl::is_promotable_to_static_storage(std::meta::remove_cv(^^T));
 
 struct to_static_storage_t {
     template <promotable_to_static_storage T>
@@ -59,10 +62,23 @@ constexpr auto to_static_storage = to_static_storage_t{};
 template <promotable_to_static_storage T>
 using to_static_storage_result_t = decltype(to_static_storage(std::declval<T>()));
 
+template <flattenable_class T>
+struct structural_mirror {
+    class type;
+
+    consteval
+    {
+        auto members = impl::make_structural_mirror_members(^^T);
+        std::meta::define_aggregate(^^type, members);
+    }
+};
+
+template <class T>
+using structural_mirror_t = typename structural_mirror<T>::type;
+
 namespace impl {
 consteval bool is_promotable_to_static_storage(std::meta::info T)
 {
-    T = std::meta::remove_cvref(T);
     // Fast path for scalar types (arithmetic, enum, pointer, etc.)
     if (std::meta::is_scalar_type(T)) {
         return true;
@@ -100,8 +116,60 @@ consteval bool is_promotable_to_static_storage(std::meta::info T)
         }
         return true;
     }
-    // (4) Object as identity
-    return std::meta::is_structural_type(T);
+    // (4) Structural types (lvalue references, or objects as identity)
+    if (std::meta::is_structural_type(T)) {
+        return true;
+    }
+    // (5) Object as structural mirror
+    if (extract<bool>(^^flattenable_class, T)) {
+        for (auto member : all_flattened_nonstatic_data_members_of(T)) {
+            if (!std::meta::has_identifier(member.info)) {
+                return false;
+            }
+            auto U = std::meta::type_of(member.info);
+            if (!extract<bool>(^^promotable_to_static_storage, U)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    // Not promotable otherwise
+    return false;
+}
+
+consteval auto make_structural_mirror_members(std::meta::info T) -> std::vector<std::meta::info>
+{
+    auto members = all_flattened_nonstatic_data_members_of(T);
+    auto n = members.n;
+
+    auto res = std::vector<std::meta::info>(n);
+
+    for (auto i = 0zU; i < n; i++) {
+        auto cur = members[i].info;
+        auto U = std::meta::type_of(cur);
+
+        if (!std::meta::has_identifier(cur)) {
+            compile_error("Anonymous union members are not supported for structural mirroring.");
+        }
+        auto name = std::meta::identifier_of(cur);
+
+        if (std::meta::is_bit_field(cur)) {
+            auto bit_width = std::meta::bit_size_of(cur);
+            res[i] = std::meta::data_member_spec(U, {.name = name, .bit_width = bit_width});
+            continue;
+        }
+        if (std::meta::is_reference_type(U)) {
+            res[i] = std::meta::data_member_spec(U, {.name = name});  // References unchanged
+            continue;
+        }
+        if (std::meta::is_empty_type(U)) {
+            res[i] = std::meta::data_member_spec(U, {.name = name, .no_unique_address = true});
+            continue;
+        }
+        auto S = std::meta::substitute(^^to_static_storage_result_t, RBOX_IL(U));
+        res[i] = std::meta::data_member_spec(S, {.name = name});
+    }
+    return res;
 }
 
 consteval auto variant_to_static_storage_result(std::meta::info T) -> std::meta::info
@@ -193,6 +261,35 @@ consteval auto pointer_to_static_storage(std::nullptr_t)
 {
     return nullptr;
 }
+
+template <size_t I, class Flattenable>
+consteval decltype(auto) ith_flattened_member_to_static_storage(const Flattenable& obj)
+{
+    constexpr auto from = all_flattened_nonstatic_data_members_v<Flattenable>[I].info;
+
+    if constexpr (std::meta::is_reference_type(std::meta::type_of(from))) {
+        return obj.[:from:];  // as lvalue-reference
+    } else {
+        return to_static_storage(obj.[:from:]);  // as prvalue
+    }
+}
+
+template <class Flattenable, size_t... Is>
+consteval auto flattenable_class_to_static_storage(
+    const Flattenable& obj, std::index_sequence<Is...>)
+{
+    using Ret = structural_mirror_t<Flattenable>;
+    return Ret{ith_flattened_member_to_static_storage<Is>(obj)...};
+}
+
+template <class Flattenable>
+consteval auto flattenable_class_to_static_storage(const Flattenable& obj)
+{
+    constexpr auto N = all_flattened_nonstatic_data_members_v<Flattenable>.size();
+
+    auto indices = std::make_index_sequence<N>();
+    return flattenable_class_to_static_storage(obj, indices);
+}
 }  // namespace impl
 
 template <promotable_to_static_storage T>
@@ -208,9 +305,11 @@ consteval auto to_static_storage_t::operator()(const T& value)
         return impl::pointer_to_static_storage(value);
     } else if constexpr (std::is_function_v<T>) {
         return static_cast<std::add_pointer_t<T>>(value);
+    } else if constexpr (std::is_structural_v<T>) {
+        return value;  // Identity
     } else {
-        static_assert(structural_type<T>, "T is not structural type.");
-        return value;
+        static_assert(flattenable_class<T>, "Invalid input type.");
+        return impl::flattenable_class_to_static_storage(value);
     }
 }
 

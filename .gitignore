@@ -3,6 +3,8 @@
 build/
 
 AGENTS.local.md
+.claude/
+.reasonix/
 
 __pycache__/
 *.pyc

@@ -130,6 +130,18 @@ template <partially_flattenable_class T>
 constexpr auto public_flattened_nonstatic_data_members_v =
     meta_span(impl::public_flattened_nsdm_arr_v<std::remove_cv_t<T>>);
 
+consteval auto all_flattened_nonstatic_data_members_of(std::meta::info T)
+{
+    using R = meta_span<flattened_data_member_info>;
+    return extract<R>(^^all_flattened_nonstatic_data_members_v, T);
+}
+
+consteval auto public_flattened_nonstatic_data_members_of(std::meta::info T)
+{
+    using R = meta_span<flattened_data_member_info>;
+    return extract<R>(^^public_flattened_nonstatic_data_members_v, T);
+}
+
 namespace impl {
 consteval bool is_flattenable_aggregate(std::meta::info T)
 {

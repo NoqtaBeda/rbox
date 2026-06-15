@@ -62,6 +62,37 @@ struct point_t {
 };
 constexpr auto val = rbox::to_static_storage(point_t{.x = 12, .y = 34});
 static_assert(std::is_same_v<decltype(val), const point_t>);
+
+// (5) Function to function pointer
+using F = void(int, double);
+static_assert(std::is_same_v<rbox::to_static_storage_result_t<F>, void (*)(int, double)>);
+
+// (6) Pointer-to-member (identity)
+constexpr auto mem_ptr = rbox::to_static_storage(&point_t::x);
+static_assert(std::is_same_v<decltype(mem_ptr), int point_t::* const>);
+
+// (7) Variant-like to meta_variant
+constexpr auto var_val = rbox::to_static_storage(std::variant<int, std::string>(42));
+static_assert(std::is_same_v<
+              std::remove_const_t<decltype(var_val)>,
+              rbox::meta_variant<int, rbox::meta_string_view>>);
+
+// (8) Flattenable class to structural_mirror_t
+struct widget_t {
+    std::string name;
+    std::vector<int> sizes;
+};
+constexpr auto mirrored = rbox::to_static_storage(widget_t{"gear", {3, 5, 7}});
+static_assert(std::is_same_v<
+              rbox::meta_string_view,  // std::string → meta_string_view
+              decltype(mirrored.name)>);
+static_assert(std::is_same_v<
+              rbox::meta_span<int>,  // std::vector<int> → meta_span<int>
+              decltype(mirrored.sizes)>);
+
+// (9) Using to_static_storage_result_t
+static_assert(
+    std::is_same_v<rbox::to_static_storage_result_t<std::vector<int>>, rbox::meta_span<int>>);
 }  // namespace examples
 
 struct some_struct_t {
@@ -661,4 +692,272 @@ TEST(ToStaticStorage, VariantIsPromotable)
                       rbox::meta_span<int>,
                       rbox::meta_pair<long, rbox::meta_string_view>,
                       rbox::meta_variant<int, double>>>);
+}
+
+struct with_vectors_t {
+    std::vector<int> values;
+    std::vector<std::vector<int>> nested_values;
+
+    static constexpr auto make(int n) -> with_vectors_t
+    {
+        auto res = with_vectors_t{};
+        for (int i = 0; i < n; i++) {
+            res.values.push_back(i);
+        }
+        for (int i = 0; i < n; i++) {
+            res.nested_values.emplace_back();
+            for (int j = i; j < n; j++) {
+                res.nested_values.back().push_back(i * n + j);
+            }
+        }
+        return res;
+    }
+};
+
+struct nested_with_vectors_t {
+    with_vectors_t v1;
+    std::vector<with_vectors_t> v2;
+    std::vector<std::pair<std::u8string, with_vectors_t>> v3;
+
+    static constexpr auto make() -> nested_with_vectors_t
+    {
+        auto res = nested_with_vectors_t{};
+
+        res.v1 = with_vectors_t::make(5);
+        for (int i = 1; i < 5; i++) {
+            res.v2.push_back(with_vectors_t::make(i));
+        }
+        res.v3.emplace_back(u8"你好", with_vectors_t::make(6));
+        res.v3.emplace_back(u8"世界", with_vectors_t::make(7));
+        return res;
+    }
+};
+
+TEST(ToStaticStorage, StructuralMirror)
+{
+    constexpr auto mirrored = rbox::to_static_storage(with_vectors_t::make(5));
+    static_assert(std::is_same_v<
+                  rbox::meta_span<int>,  // <-- std::vector<int>
+                  decltype(mirrored.values)>);
+    static_assert(std::is_same_v<
+                  rbox::meta_span<rbox::meta_span<int>>,  // <-- std::vector<std::vector<int>>
+                  decltype(mirrored.nested_values)>);
+
+    static_assert(mirrored.values.size() == 5);
+    static_assert(mirrored.values[4] == 4);
+
+    static_assert(mirrored.nested_values.size() == 5);
+    static_assert(mirrored.nested_values[4].size() == 1);
+    static_assert(mirrored.nested_values[4][0] == 24);
+}
+
+TEST(ToStaticStorage, StructuralMirrorNested)
+{
+    using inner_mirrored_t = rbox::structural_mirror_t<with_vectors_t>;
+
+    constexpr auto mirrored = rbox::to_static_storage(nested_with_vectors_t::make());
+    static_assert(std::is_same_v<inner_mirrored_t, decltype(mirrored.v1)>);
+    static_assert(std::is_same_v<rbox::meta_span<inner_mirrored_t>, decltype(mirrored.v2)>);
+    static_assert(std::is_same_v<
+                  rbox::meta_span<rbox::meta_pair<rbox::meta_u8string_view, inner_mirrored_t>>,
+                  decltype(mirrored.v3)>);
+
+    static_assert(mirrored.v1.values.size() == 5);
+
+    static_assert(mirrored.v2.size() == 4);
+    static_assert(mirrored.v2.front().values.size() == 1);
+    static_assert(mirrored.v2.back().values.size() == 4);
+
+    static_assert(mirrored.v3[0].first == u8"你好");
+    static_assert(mirrored.v3[0].second.nested_values[5][0] == 35);
+    static_assert(mirrored.v3[1].first == u8"世界");
+    static_assert(mirrored.v3[1].second.nested_values[5][1] == 41);
+    static_assert(mirrored.v3[1].second.nested_values[6][0] == 48);
+}
+
+struct with_bitfield_t {
+    unsigned flag : 4;
+    unsigned mode : 3;
+    unsigned value : 17;
+    int neg : 5;
+    char small : 3;
+
+    static constexpr auto make() -> with_bitfield_t
+    {
+        return with_bitfield_t{.flag = 5, .mode = 3, .value = 99999, .neg = -7, .small = 2};
+    }
+};
+
+TEST(ToStaticStorage, StructuralMirrorBitfield)
+{
+    constexpr auto mirrored = rbox::to_static_storage(with_bitfield_t::make());
+
+    // Exactly 32 bits in total.
+    static_assert(sizeof(mirrored) == sizeof(uint32_t));
+
+    // Bit-field members with scalar types → identity promotion
+    static_assert(std::is_same_v<unsigned, decltype(mirrored.flag)>);
+    static_assert(std::is_same_v<unsigned, decltype(mirrored.mode)>);
+    static_assert(std::is_same_v<unsigned, decltype(mirrored.value)>);
+    static_assert(std::is_same_v<int, decltype(mirrored.neg)>);
+    static_assert(std::is_same_v<char, decltype(mirrored.small)>);
+
+    static_assert(mirrored.flag == 5);
+    static_assert(mirrored.mode == 3);
+    static_assert(mirrored.value == 99999);
+    static_assert(mirrored.neg == -7);
+    static_assert(mirrored.small == 2);
+}
+
+struct with_reference_1_t {
+    const int& int_ref;
+    const double& double_ref;
+};
+
+TEST(ToStaticStorage, StructuralMirrorReference1)
+{
+    static constexpr int answer = 42;
+    static constexpr double pi = 3.14159;
+
+    constexpr auto mirrored =
+        rbox::to_static_storage(with_reference_1_t{.int_ref = answer, .double_ref = pi});
+
+    // with_reference_1_t itself is structural
+    static_assert(std::is_same_v<const with_reference_1_t, decltype(mirrored)>);
+
+    static_assert(mirrored.int_ref == answer);
+    static_assert(mirrored.double_ref == pi);
+    static_assert(&mirrored.int_ref == &answer);
+    static_assert(&mirrored.double_ref == &pi);
+}
+
+std::string g_string;
+
+struct with_reference_2_t {
+    std::string& str_ref;
+    const std::string* const str_ptr;
+    std::vector<std::string> const str_list;
+};
+
+TEST(ToStaticStorage, StructuralMirrorReference2)
+{
+    constexpr auto mirrored = rbox::to_static_storage(
+        with_reference_2_t{
+            .str_ref = g_string,
+            .str_ptr = &g_string,
+            .str_list = {"Hello", "World", "of", "C++"},
+        });
+
+    static_assert(std::is_same_v<
+                  std::string&,  // <-- std::string&
+                  decltype(mirrored.str_ref)>);
+    static_assert(std::is_same_v<
+                  const std::string*,  // <-- const std::string* const
+                  decltype(mirrored.str_ptr)>);
+    static_assert(std::is_same_v<
+                  rbox::meta_span<rbox::meta_string_view>,  // <-- std::vector<std::string> const
+                  decltype(mirrored.str_list)>);
+
+    static_assert(&mirrored.str_ref == &g_string);
+    static_assert(mirrored.str_ptr == &g_string);
+
+    static_assert(mirrored.str_list.size() == 4);
+    static_assert(mirrored.str_list[0] == "Hello");
+    static_assert(mirrored.str_list[1] == "World");
+    static_assert(mirrored.str_list[2] == "of");
+    static_assert(mirrored.str_list[3] == "C++");
+}
+
+struct empty_tag_t {};
+
+struct with_empty_member_t {
+    std::string name;
+    empty_tag_t category;
+};
+
+TEST(ToStaticStorage, StructuralMirrorEmptyMember)
+{
+    constexpr auto mirrored = rbox::to_static_storage(with_empty_member_t{.name = "HelloWorld"});
+
+    static_assert(std::is_same_v<rbox::meta_string_view, decltype(mirrored.name)>);
+    static_assert(std::is_same_v<empty_tag_t, decltype(mirrored.category)>);
+
+    // category is marked as [[no_unique_address]]
+    static_assert(sizeof(mirrored) == sizeof(rbox::meta_string_view));
+
+    static_assert(mirrored.name == "HelloWorld");
+}
+
+struct base_t {
+    long base_id;
+    std::string base_label;
+};
+
+struct derived_t : base_t {
+    double extra;
+    std::vector<int> data;
+};
+
+struct empty_marker_t {};
+
+struct combo_base_t {
+    int base_id;
+};
+
+struct combo_t : combo_base_t {
+    const std::string& name_ref;
+    int small_field : 7;
+    empty_marker_t marker;
+    std::vector<long> items;
+
+    static constexpr auto make(const std::string& name) -> combo_t
+    {
+        return combo_t{combo_base_t{999}, name, 63, {}, {1L, 101L, 201L}};
+    }
+};
+
+TEST(ToStaticStorage, StructuralMirrorInheritance)
+{
+    constexpr auto mirrored =
+        rbox::to_static_storage(derived_t{base_t{200L, "derived"}, 3.14, {0, 10, 20, 30, 40}});
+
+    // Flattened: members from both base_t and derived_t appear at top level
+    static_assert(std::is_same_v<long, decltype(mirrored.base_id)>);
+    static_assert(std::is_same_v<rbox::meta_string_view, decltype(mirrored.base_label)>);
+    static_assert(std::is_same_v<double, decltype(mirrored.extra)>);
+    static_assert(std::is_same_v<rbox::meta_span<int>, decltype(mirrored.data)>);
+
+    static_assert(mirrored.base_id == 200L);
+    static_assert(mirrored.base_label == "derived");
+    static_assert(mirrored.extra == 3.14);
+    static_assert(mirrored.data.size() == 5);
+    static_assert(mirrored.data[0] == 0);
+    static_assert(mirrored.data[4] == 40);
+}
+
+TEST(ToStaticStorage, StructuralMirrorCombined)
+{
+    static auto name_str = std::string{"hello_mirror"};
+    constexpr auto mirrored = rbox::to_static_storage(combo_t::make(name_str));
+
+    // Inheritance: base_id from combo_base_t
+    static_assert(std::is_same_v<int, decltype(mirrored.base_id)>);
+    // Reference → pointer
+    static_assert(std::is_same_v<const std::string&, decltype(mirrored.name_ref)>);
+    // Bit-field → identity
+    static_assert(std::is_same_v<int, decltype(mirrored.small_field)>);
+    // Empty type → identity (with [[no_unique_address]])
+    static_assert(std::is_same_v<empty_marker_t, decltype(mirrored.marker)>);
+    // Range → meta_span
+    static_assert(std::is_same_v<rbox::meta_span<long>, decltype(mirrored.items)>);
+
+    static_assert(&mirrored.name_ref == &name_str);
+
+    static_assert(mirrored.base_id == 999);
+    static_assert(mirrored.small_field == 63);
+    static_assert(std::is_empty_v<decltype(mirrored.marker)>);
+    static_assert(mirrored.items.size() == 3);
+    static_assert(mirrored.items[0] == 1L);
+    static_assert(mirrored.items[1] == 101L);
+    static_assert(mirrored.items[2] == 201L);
 }
