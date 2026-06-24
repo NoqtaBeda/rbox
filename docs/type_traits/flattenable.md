@@ -126,6 +126,12 @@ constexpr meta_span<flattened_data_member_info> all_flattened_nonstatic_data_mem
 template <partially_flattenable_class T>
 constexpr meta_span<flattened_data_member_info> public_flattened_nonstatic_data_members_v;
 
+consteval auto all_flattened_nonstatic_data_members_of(std::meta::info T)
+    -> meta_span<flattened_data_member_info>;
+
+consteval auto public_flattened_nonstatic_data_members_of(std::meta::info T)
+    -> meta_span<flattened_data_member_info>;
+
 }  // namespace rbox
 ```
 
@@ -177,6 +183,10 @@ public:
 The variable template `all_flattened_nonstatic_data_members_v` gets a full list of non-static data members of non-union class `T`, including direct and inherited ones. Members are sorted in ascending order by actual offset relative to `T`.
 
 The variable template `public_flattened_nonstatic_data_members_v` gets a full list of non-static data members with public access of non-union class `T` (i.e. each member in the list can be accessed globally via class `T`), including direct and inherited ones. Members are sorted in ascending order by actual offset relative to `T`.
+
+The function `all_flattened_nonstatic_data_members_of` takes a reflection `T` of a class type and returns a `meta_span<flattened_data_member_info>` containing all non-static data members (including inherited ones) of that class.  `T` must reflect a type that satisfies the `partially_flattenable_class` concept.
+
+The function `public_flattened_nonstatic_data_members_of` is the public-only variant.
 
 Example:
 

@@ -112,12 +112,25 @@ if(PROJECT_IS_TOP_LEVEL)
     endfunction()
 
     # =============================================================================
-    # Blacklist (GCC 16.1 internal compiler error)
+    # UT Blacklist
     # =============================================================================
-    set(TEST_BLACKLIST
-        lookup/class_member/enum_key/test_custom_filter
+    set(TEST_BLACKLIST)
+
+    # Still fails due to internal bug (with GCC trunk at 2026.6.22)
+    list(APPEND TEST_BLACKLIST
         lookup/class_member/string_key/test_special_members
     )
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        # GCC 16.1 fails to work due to internal bug
+        # (with reflection of functions when the return type is reference)
+        if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS_EQUAL 16.1)
+            list(APPEND TEST_BLACKLIST
+                lookup/class_member/enum_key/test_custom_filter
+                lookup/class_member/string_key/test_access_context_nsdm_1
+                lookup/class_member/string_key/test_access_context_nsdm_2
+            )
+        endif()
+    endif()
 
     # =============================================================================
     # Discover and create all test targets

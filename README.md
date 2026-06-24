@@ -16,14 +16,14 @@ Key features:
 
 Auxiliary features:
 
-- **Type traits**: Provides a mechanism to "flatten" a class type — get a full list of data members, including those inherited from direct or indirect bases. Many other useful components for type classification, invocability testing, etc. are included.
+- **Type traits**: Provides a mechanism to "flatten" a class type — get a full list of data members, including those inherited from direct or indirect bases. Many other useful components for type classification, invocability testing, etc. are included as well.
 
 - **Utility**: A collection of frequently used components, including:
   - **Recursive data promotion to static storage** — `to_static_storage()` recursively converts nested ranges, tuples, and variants into structural types, going beyond what `std::define_static_array()` and `std::define_static_string()` offer;
   - **`constexpr` UTF conversion** — Converts strings between UTF-8, UTF-16, and UTF-32 encodings;
   - **`constexpr` string builder** — Builds strings with an exponentially growing buffer;
   - **`constexpr` identifier style converter** — Converts between snake_case, CamelCase, Http-Header-Case, and more;
-  - Structural container types (`meta_span`, `meta_variant`, etc.) that complement the standard library.
+  - Structural container types (`meta_span`, `meta_variant`, etc.) as replacement to the standard library components which are non-structural.
 
 Detailed documentation for each component is available in the [`docs/`](docs/) directory:
 
@@ -35,6 +35,11 @@ Detailed documentation for each component is available in the [`docs/`](docs/) d
 | Serialization   | [`docs/serializer.md`](docs/serializer.md)                                                    |
 | Type traits     | [`docs/type_traits.md`](docs/type_traits.md)                                                  |
 | Utilities       | [`docs/utils.md`](docs/utils.md) and [`docs/to_static_storage.md`](docs/to_static_storage.md) |
+
+## Blogs & Design Notes
+
+- [Extension to `std::define_static_array()` - More Powerful Compile-time Data Promotion](https://noqtabeda.github.io/2026/06/19/cpp26-static-data-promotion_en/)
+- [Dispatch Table with C++26 Reflection - Zero Boilerplate & Zero Runtime Overhead](https://noqtabeda.github.io/2026/06/20/cpp26-dispatch-table_en/)
 
 ## Quick Start
 
@@ -318,7 +323,14 @@ int main() {
 
 ## Prerequisites
 
-- **GCC 16.1** or later (with `-freflection` flag)
+Recommended compiler version:
+- **GCC 16.2** or later (with `-freflection` flag)
+
+Minimal compiler version:
+- GCC 16.1 or later (with `-freflection` flag)
+
+A small fraction of `rbox` API may fail to work with compiler version below the recommended due to internal compiler bug. Known issues including:
+- `rbox::make_nonstatic_data_member_fixed_map()` does not work in GCC 16.1 unless the access context is `unprivileged()` (i.e. `public` non-static data members only).
 
 ## Using rbox in Your CMake Project
 
@@ -348,31 +360,7 @@ FetchContent_MakeAvailable(rbox)
 target_link_libraries(myapp PRIVATE rbox::rbox)
 ```
 
-## Build & Run Test Cases
-
-### With XMake
-
-```shell
-# Configure (GCC 16)
-xmake f -m debug \
-        --sdk=<gcc-root> \
-        --cxxflags="-freflection" \
-        --toolchain=gcc
-
-# Build and run all tests
-xmake run --group=tests/**
-
-# Run a specific test
-xmake run tests-utils-test_utility
-```
-
-Available CMake options:
-
-| Option        | Default | Description                                |
-| ------------- | ------- | ------------------------------------------ |
-| `static-test` | `false` | Enable compile-time static assertion tests |
-
-### With CMake
+## Build & Run Test Cases with CMake
 
 ```shell
 # Configure
@@ -411,7 +399,4 @@ Special thanks to author of [`magic_enum`](https://github.com/Neargye/magic_enum
 
 - `fixed_set`
 - Serialization
-  - to YAML
-- Deserialization
-  - to JSON
   - to YAML

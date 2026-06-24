@@ -1,17 +1,17 @@
 '''
 Test the compilation time of each target (UT, examples, benchmarks, etc.).
 The script performs the following steps:
-1. Run xmake configuration command:
-   "xmake f -p linux -a x86_64 -m MODE --sdk=PATH --toolchain=gcc --cxxflags="-freflection" --static-test=[yn]"
-2. Run build command "xmake clean TARGET && xmake build TARGET" for each TARGET available.
-   Compilation time can be obtained by xmake output: "[100%]: build ok, spent ???s" if compilation succeeds.
+1. Run CMake configuration command:
+   "cmake -B build -G Ninja -DCMAKE_C_COMPILER=<gcc-root>/bin/gcc -DCMAKE_CXX_COMPILER=<gcc-root>/bin/g++ -DCMAKE_BUILD_TYPE=MODE"
+2. Run build command "cmake --build build --target TARGET" for each TARGET available.
+   Compilation time is measured via Python's time module.
    Each target is repeated for R times and the average compilation time is taken.
 3. Output a summary table to specified file or stdout after all the targets are tested.
 
 Options:
   --gcc-path PATH: Sets the root directory of GCC. Default is "/usr".
-  --mode (or -m) MODE: Set build mode (debug, release, etc.). Default is "debug".
-  --static-test (or -S): Enables static test (with argument "--static-test=y").
+  --mode (or -m) MODE: Set build mode (Debug, Release, etc.). Default is "Debug".
+  --static-test (or -S): Enables static test (adds -DRBOX_STATIC_TEST=ON).
   --retry-count (or -r) R: Set the number of repeated times for each target. Default is 5.
   --filter (or -f) REGEX: Sets the filter of targets to be tested.
                           A target is tested only if its name **fully matches** given regular expression.
@@ -39,13 +39,16 @@ import subprocess
 import sys
 from typing import Optional
 
+# Build directory for CMake
+BUILD_DIR = "build/cmake_test"
+
 # Module-level taskset prefix, set by main() based on --pcores / --pin-to-pcores.
 _TASKSET_PREFIX = ""
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Test the compilation time of each xmake target."
+        description="Test the compilation time of each CMake target."
     )
     parser.add_argument(
         "--gcc-path",
@@ -54,13 +57,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--mode", "-m",
-        default="debug",
-        help="Build mode (debug, release, etc.). Default: debug",
+        default="Debug",
+        help="Build mode (Debug, Release, etc.). Default: Debug",
     )
     parser.add_argument(
         "--static-test", "-S",
         action="store_true",
-        help="Enable static test (--static-test=y).",
+        help="Enable static test (-DRBOX_STATIC_TEST=ON).",
     )
     parser.add_argument(
         "--retry-count", "-r",
@@ -125,18 +128,16 @@ def run_cmd(cmd: str, cwd: Optional[str] = None, timeout: Optional[int] = None) 
     )
 
 
-def configure_xmake(args: argparse.Namespace) -> None:
-    """Run the xmake configuration step."""
-    static_test_flag = "y" if args.static_test else "n"
-
+def configure_cmake(args: argparse.Namespace) -> None:
+    """Run the CMake configuration step."""
     cmd = (
-        f'xmake f -p linux -a x86_64 -m {args.mode}'
-        f' --ccache=n'
-        f' --sdk={args.gcc_path}'
-        f' --toolchain=gcc'
-        f' --cxxflags="-freflection"'
-        f' --static-test={static_test_flag}'
+        f'cmake -B {BUILD_DIR} -G Ninja'
+        f' -DCMAKE_C_COMPILER={args.gcc_path}/bin/gcc'
+        f' -DCMAKE_CXX_COMPILER={args.gcc_path}/bin/g++'
+        f' -DCMAKE_BUILD_TYPE={args.mode}'
     )
+    if args.static_test:
+        cmd += ' -DRBOX_STATIC_TEST=ON'
     print(f"[configure] Running: {cmd}")
     result = run_cmd(cmd)
     if result.returncode != 0:
@@ -146,26 +147,42 @@ def configure_xmake(args: argparse.Namespace) -> None:
 
 
 def list_targets() -> list[str]:
-    """Retrieve all available xmake build targets."""
-    result = run_cmd("xmake show -l targets")
+    """Retrieve all available build targets (test executables, examples, benchmarks)."""
+    result = run_cmd(f"ninja -C {BUILD_DIR} -t targets all")
     if result.returncode != 0:
         print(f"[list_targets] ERROR:\n{result.stderr}")
         sys.exit(1)
 
-    # The output is multi-column space-separated; split on whitespace.
-    # Strip ANSI escape sequences that may be appended to target names.
-    raw_targets = _ANSI_ESCAPE_RE.sub("", result.stdout).split()
-    # Filter out any stray non-target tokens (xmake targets look like "group-name").
-    targets = [t for t in raw_targets if "-" in t]
+    # ninja -t targets all outputs lines like:
+    #   target_name: rule_name
+    # We only keep final linker/executable targets (not .o files or phony deps).
+    known_prefixes = ("tests-", "examples-", "benchmarks-")
+    linker_rules = (
+        "CXX_EXECUTABLE_LINKER",
+        "CXX_STATIC_LIBRARY_LINKER",
+        "CXX_SHARED_LIBRARY_LINKER",
+    )
+    targets = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if ":" not in line:
+            continue
+        name, _, rule = line.partition(":")
+        name = name.strip()
+        rule = rule.strip()
+        if not name.startswith(known_prefixes):
+            continue
+        if not any(rule.startswith(r) for r in linker_rules):
+            continue
+        targets.append(name)
+
     print(f"[list_targets] Found {len(targets)} targets.")
     return targets
 
 
-# Regex to extract compilation time from xmake output:
-#   "[100%]: build ok, spent 1.234s"
-_BUILD_TIME_RE = re.compile(r"\[100%\]: build ok, spent ([\d.]+)s")
-
-# Regex to strip ANSI escape sequences (color codes) from xmake output.
+# Regex to strip ANSI escape sequences (color codes) from build output.
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
 
 
@@ -173,35 +190,62 @@ def build_target_once(target: str, warmup: bool = False, verbose: bool = False) 
     """
     Clean and build a single target once.
     Returns the compilation time in seconds, or None on failure.
-    If *warmup* is True, the result is not used for averaging
-    (but we still return the time for logging).
+    If *warmup* is True, performs a clean+build without timing
+    (to warm filesystem caches); the return value is ignored.
     """
-    # Clean
-    clean_result = run_cmd(f"xmake clean {target}")
+    import time as time_module
+
+    if warmup:
+        # Warmup: clean and build without timing
+        result = run_cmd(
+            f"cmake --build {BUILD_DIR} --target {target} --clean-first"
+            f"{' --verbose' if verbose else ''}",
+            timeout=3600,
+        )
+        if result.returncode != 0:
+            if verbose:
+                print(
+                    f"[build] WARNING: warmup build failed for {target}:\n"
+                    f"{result.stdout}{result.stderr}"
+                )
+            else:
+                print(
+                    f"[build] WARNING: warmup build failed for"
+                    f" {target} (use -v for details)"
+                )
+            return None  # warmup failed
+        return 0.0  # warmup succeeded (timing discarded)
+
+    # Clean first (only clean, don't build yet)
+    clean_result = run_cmd(f"cmake --build {BUILD_DIR} --target clean")
     if clean_result.returncode != 0:
         if verbose:
-            print(f"[build] WARNING: clean failed for {target}:\n{clean_result.stdout}{clean_result.stderr}")
+            print(
+                f"[build] WARNING: clean failed for {target}:\n"
+                f"{clean_result.stdout}{clean_result.stderr}"
+            )
         else:
             print(f"[build] WARNING: clean failed for {target}")
 
-    # Build
-    build_result = run_cmd(f"xmake build {'--verbose' if verbose else ''} {target}")
+    # Build with timing
+    start = time_module.time()
+    build_result = run_cmd(
+        f"cmake --build {BUILD_DIR} --target {target}"
+        f"{' --verbose' if verbose else ''}",
+        timeout=3600,
+    )
+    elapsed = time_module.time() - start
     if build_result.returncode != 0:
         if verbose:
-            print(f"[build] ERROR: build failed for {target}:\n{build_result.stdout}{build_result.stderr}")
+            print(
+                f"[build] ERROR: build failed for {target}:\n"
+                f"{build_result.stdout}{build_result.stderr}"
+            )
         else:
             print(f"[build] ERROR: build failed for {target} (use -v for compiler output)")
         return None
 
-    # Parse timing from combined stdout+stderr
-    output = _ANSI_ESCAPE_RE.sub("", build_result.stdout + build_result.stderr)
-    match = _BUILD_TIME_RE.search(output)
-    if match:
-        return float(match.group(1))
-    else:
-        if verbose:
-            print(f"[build] WARNING: could not parse build time for {target}")
-        return None
+    return elapsed
 
 
 def build_target_repeated(
@@ -220,7 +264,7 @@ def build_target_repeated(
         t = build_target_once(target, warmup=True, verbose=verbose)
         if t is not None:
             if verbose:
-                print(f"[build] {target}: warm-up done ({t:.3f}s)")
+                print(f"[build] {target}: warm-up done")
         else:
             print(f"{'' if verbose else chr(10)}[build] {target}: warm-up FAILED")
 
@@ -381,7 +425,7 @@ def main() -> None:
         _TASKSET_PREFIX = f"taskset -c {pcore_list}"
 
     # Step 1: configure
-    configure_xmake(args)
+    configure_cmake(args)
 
     # Step 2: discover targets
     targets = list_targets()

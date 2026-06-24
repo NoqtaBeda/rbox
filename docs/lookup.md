@@ -142,7 +142,7 @@ The public interface is a set of macros. Each macro wraps a `make_*_fixed_map()`
 
 | Macro (Common prefix `RBOX_` omitted)                                                                   | Wrapped function                                                                                  | Category                    |
 | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | --------------------------- |
-| `PUBLIC_NONSTATIC_DATA_MEMBER_FIXED_MAP(T, ...)`                                                        | `make_public_nonstatic_data_member_fixed_map`                                                     | Non-static data members     |
+| `NONSTATIC_DATA_MEMBER_FIXED_MAP(T, ...)` <br> `PUBLIC_NONSTATIC_DATA_MEMBER_FIXED_MAP(T, ...)`         | `make_nonstatic_data_member_fixed_map` <br> `make_public_nonstatic_data_member_fixed_map`         | Non-static data members     |
 | `NONSTATIC_MEMBER_FUNCTION_FIXED_MAP(T, ...)` <br> `PUBLIC_NONSTATIC_MEMBER_FUNCTION_FIXED_MAP(T, ...)` | `make_nonstatic_member_function_fixed_map` <br> `make_public_nonstatic_member_function_fixed_map` | Non-static member functions |
 | `STATIC_DATA_MEMBER_FIXED_MAP(T, ...)` <br> `PUBLIC_STATIC_DATA_MEMBER_FIXED_MAP(T, ...)`               | `make_static_data_member_fixed_map` <br> `make_public_static_data_member_fixed_map`               | Static data members         |
 | `STATIC_MEMBER_FUNCTION_FIXED_MAP(T, ...)` <br> `PUBLIC_STATIC_MEMBER_FUNCTION_FIXED_MAP(T, ...)`       | `make_static_member_function_fixed_map` <br> `make_public_static_member_function_fixed_map`       | Static member functions     |
@@ -155,9 +155,8 @@ The public interface is a set of macros. Each macro wraps a `make_*_fixed_map()`
 | `FUNCTION_FIXED_MAP(ns, ...)`         | `make_function_fixed_map` | Functions |
 
 **Notes**:
-
-- Class non-static data members only have public API due to a GCC 16.1 reflection limitation (confirmed to be a GCC bug. See [demo code](./code/meta_bug_1.cpp) for details).
 - The default access context is `RBOX_CURRENT_CONTEXT` (see [Access Contexts](./utils/meta_utility.md#access-contexts)), which is equivalent to `std::meta::access_context::current()`.
+- On GCC 16.1, `RBOX_NONSTATIC_DATA_MEMBER_FIXED_MAP` is not available due to a compiler bug. See [Prerequisites](../README.md#prerequisites) for details.
 
 ### Rules of Member Traversal
 
@@ -297,17 +296,33 @@ All the components shown below are defined in header `<rbox/lookup.hpp>`.
 
 ### Non-Static Data Members (Class)
 
-Only public members can be queried (GCC 16.1 limitation).
+On GCC 16.1, only the `public` non-static data members are accessible via `RBOX_PUBLIC_NONSTATIC_DATA_MEMBER_FIXED_MAP` API. (see [Prerequisites](../README.md#prerequisites)) due to compiler bug.
+
+Starting from GCC 16.2, the bug is fixed and non-public members can also be queried via `RBOX_NONSTATIC_DATA_MEMBER_FIXED_MAP`.
 
 ```cpp
 namespace rbox {
 
 // (1) Pattern only
+consteval auto make_nonstatic_data_member_fixed_map(
+    std::meta::info T,
+    std::string_view pattern,
+    const string_key_fixed_map_options& options = {},
+    std::meta::access_context ctx = RBOX_CURRENT_CONTEXT) -> std::meta::info;
+
 consteval auto make_public_nonstatic_data_member_fixed_map(
     std::meta::info T, std::string_view pattern, const string_key_fixed_map_options& options = {})
     -> std::meta::info;
 
 // (2.1) Pattern + transform_fn → integral/enum key
+template <ikey_pattern_transform_fn TransformFn>
+consteval auto make_nonstatic_data_member_fixed_map(
+    std::meta::info T,
+    std::string_view pattern,
+    const TransformFn& transform_fn,
+    const integral_key_fixed_map_options& options = {},
+    std::meta::access_context ctx = RBOX_CURRENT_CONTEXT) -> std::meta::info;
+
 template <ikey_pattern_transform_fn TransformFn>
 consteval auto make_public_nonstatic_data_member_fixed_map(
     std::meta::info T,
@@ -317,20 +332,42 @@ consteval auto make_public_nonstatic_data_member_fixed_map(
 
 // (2.2) Pattern + transform_fn → string key
 template <skey_pattern_transform_fn TransformFn>
+consteval auto make_nonstatic_data_member_fixed_map(
+    std::meta::info T,
+    std::string_view pattern,
+    const TransformFn& transform_fn,
+    const string_key_fixed_map_options& options = {},
+    std::meta::access_context ctx = RBOX_CURRENT_CONTEXT) -> std::meta::info;
+
+template <skey_pattern_transform_fn TransformFn>
 consteval auto make_public_nonstatic_data_member_fixed_map(
     std::meta::info T,
     std::string_view pattern,
     const TransformFn& transform_fn,
     const string_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.1) Transform function only (meta::info) → integral/enum key
+// (3.1) Transform function only (std::meta::info) → integral/enum key
+template <ikey_member_transform_fn TransformFn>
+consteval auto make_nonstatic_data_member_fixed_map(
+    std::meta::info T,
+    const TransformFn& transform_fn,
+    const integral_key_fixed_map_options& options = {},
+    std::meta::access_context ctx = RBOX_CURRENT_CONTEXT) -> std::meta::info;
+
 template <ikey_member_transform_fn TransformFn>
 consteval auto make_public_nonstatic_data_member_fixed_map(
     std::meta::info T,
     const TransformFn& transform_fn,
     const integral_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.2) Transform function only (meta::info) → string key
+// (3.2) Transform function only (std::meta::info) → string key
+template <skey_member_transform_fn TransformFn>
+consteval auto make_nonstatic_data_member_fixed_map(
+    std::meta::info T,
+    const TransformFn& transform_fn,
+    const string_key_fixed_map_options& options = {},
+    std::meta::access_context ctx = RBOX_CURRENT_CONTEXT) -> std::meta::info;
+
 template <skey_member_transform_fn TransformFn>
 consteval auto make_public_nonstatic_data_member_fixed_map(
     std::meta::info T,
@@ -338,6 +375,9 @@ consteval auto make_public_nonstatic_data_member_fixed_map(
     const string_key_fixed_map_options& options = {}) -> std::meta::info;
 
 }  // namespace rbox
+
+#define RBOX_NONSTATIC_DATA_MEMBER_FIXED_MAP(T, ...) \
+    [:rbox::make_nonstatic_data_member_fixed_map(^^T, ##__VA_ARGS__):]
 
 #define RBOX_PUBLIC_NONSTATIC_DATA_MEMBER_FIXED_MAP(T, ...) \
     [:rbox::make_public_nonstatic_data_member_fixed_map(^^T, ##__VA_ARGS__):]
@@ -391,7 +431,7 @@ consteval auto make_public_nonstatic_member_function_fixed_map(
     const TransformFn& transform_fn,
     const string_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.1) Transform function only (meta::info) → integral/enum key
+// (3.1) Transform function only (std::meta::info) → integral/enum key
 template <ikey_member_transform_fn TransformFn>
 consteval auto make_nonstatic_member_function_fixed_map(
     std::meta::info T,
@@ -405,7 +445,7 @@ consteval auto make_public_nonstatic_member_function_fixed_map(
     const TransformFn& transform_fn,
     const integral_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.2) Transform function only (meta::info) → string key
+// (3.2) Transform function only (std::meta::info) → string key
 template <skey_member_transform_fn TransformFn>
 consteval auto make_nonstatic_member_function_fixed_map(
     std::meta::info T,
@@ -476,7 +516,7 @@ consteval auto make_public_static_data_member_fixed_map(
     const TransformFn& transform_fn,
     const string_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.1) Transform function only (meta::info) → integral/enum key
+// (3.1) Transform function only (std::meta::info) → integral/enum key
 template <ikey_member_transform_fn TransformFn>
 consteval auto make_static_data_member_fixed_map(
     std::meta::info T,
@@ -490,7 +530,7 @@ consteval auto make_public_static_data_member_fixed_map(
     const TransformFn& transform_fn,
     const integral_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.2) Transform function only (meta::info) → string key
+// (3.2) Transform function only (std::meta::info) → string key
 template <skey_member_transform_fn TransformFn>
 consteval auto make_static_data_member_fixed_map(
     std::meta::info T,
@@ -561,7 +601,7 @@ consteval auto make_public_static_member_function_fixed_map(
     const TransformFn& transform_fn,
     const string_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.1) Transform function only (meta::info) → integral/enum key
+// (3.1) Transform function only (std::meta::info) → integral/enum key
 template <ikey_member_transform_fn TransformFn>
 consteval auto make_static_member_function_fixed_map(
     std::meta::info T,
@@ -575,7 +615,7 @@ consteval auto make_public_static_member_function_fixed_map(
     const TransformFn& transform_fn,
     const integral_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.2) Transform function only (meta::info) → string key
+// (3.2) Transform function only (std::meta::info) → string key
 template <skey_member_transform_fn TransformFn>
 consteval auto make_static_member_function_fixed_map(
     std::meta::info T,
@@ -628,14 +668,14 @@ consteval auto make_variable_fixed_map(
     const TransformFn& transform_fn,
     const string_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.1) Transform function only (meta::info) → integral/enum key
+// (3.1) Transform function only (std::meta::info) → integral/enum key
 template <ikey_member_transform_fn TransformFn>
 consteval auto make_variable_fixed_map(
     std::meta::info ns,
     const TransformFn& transform_fn,
     const integral_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.2) Transform function only (meta::info) → string key
+// (3.2) Transform function only (std::meta::info) → string key
 template <skey_member_transform_fn TransformFn>
 consteval auto make_variable_fixed_map(
     std::meta::info ns,
@@ -665,14 +705,14 @@ consteval auto make_function_fixed_map(
     const TransformFn& transform_fn,
     const string_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.1) Transform function only (meta::info) → integral/enum key
+// (3.1) Transform function only (std::meta::info) → integral/enum key
 template <ikey_member_transform_fn TransformFn>
 consteval auto make_function_fixed_map(
     std::meta::info ns,
     const TransformFn& transform_fn,
     const integral_key_fixed_map_options& options = {}) -> std::meta::info;
 
-// (3.2) Transform function only (meta::info) → string key
+// (3.2) Transform function only (std::meta::info) → string key
 template <skey_member_transform_fn TransformFn>
 consteval auto make_function_fixed_map(
     std::meta::info ns,

@@ -24,7 +24,6 @@
 #define RBOX_LOOKUP_HPP
 
 #include <rbox/fixed_map.hpp>
-#include <rbox/type_traits/class_types/flattened_nsdm.hpp>
 #include <rbox/type_traits/pointer_to_member.hpp>
 #include <rbox/type_traits/template_instance.hpp>
 #include <rbox/utils/addressable_member.hpp>
@@ -102,33 +101,6 @@ concept skey_member_transform_fn = is_skey_member_transform_fn(^^T);
 
 using direct_members_query_fn =  // std::meta::members_of(), etc.
     std::vector<std::meta::info>(std::meta::info, std::meta::access_context);
-
-template <class TransformFn>
-consteval auto lookup_nonstatic_data_members(std::meta::info T, const TransformFn& transform_fn)
-{
-    // TransformResult = std::optional<Ret>
-    using TransformResult = std::invoke_result_t<TransformFn, std::meta::info>;
-    using Ret = transformed_key_t<TransformResult>;
-
-    // For non-static data members: public members only due to addressing constraints
-    auto members = extract<meta_span<flattened_data_member_info>>(
-        ^^public_flattened_nonstatic_data_members_v, T);
-
-    auto res = std::vector<std::pair<Ret, std::meta::info>>{};
-    for (auto [info, _] : members) {
-        if (!is_addressable_class_member(info)) {
-            continue;
-        }
-        if constexpr (template_instance_of<TransformResult, std::optional>) {
-            if (auto tr = transform_fn(info)) {
-                res.emplace_back(*tr, info);
-            }
-        } else {
-            res.emplace_back(transform_fn(info), info);
-        }
-    }
-    return res;
-}
 
 template <class Ret, class TransformFn>
 consteval void lookup_class_members_impl(
@@ -409,29 +381,41 @@ consteval auto rename_by_pattern(
 }
 }  // namespace impl::lookup
 
-// -------- Non-static Data Members (public access only due to GCC 16.1 bug) --------
+// -------- Non-static Data Members --------
 
 // Overload (1)
-consteval auto make_public_nonstatic_data_member_fixed_map(
-    std::meta::info T, std::string_view pattern, const string_key_fixed_map_options& options = {})
-    -> std::meta::info
+consteval auto make_nonstatic_data_member_fixed_map(
+    std::meta::info T,
+    std::string_view pattern,
+    const string_key_fixed_map_options& options = {},
+    std::meta::access_context ctx = RBOX_CURRENT_CONTEXT) -> std::meta::info
 {
     using namespace impl::lookup;
 
     auto [prefix, suffix] = decompose_prefix_suffix(pattern);
-    auto entries = lookup_nonstatic_data_members(T, [prefix, suffix](std::meta::info member) {
+    auto pattern_transform_fn = [prefix, suffix](std::meta::info member) {
         return rename_by_pattern(member, prefix, suffix);
-    });
+    };
+    auto entries = lookup_class_members(
+        T, ctx.via(T), std::meta::nonstatic_data_members_of, pattern_transform_fn);
     return build_nonstatic_member_map(T, entries, options);
+}
+
+consteval auto make_public_nonstatic_data_member_fixed_map(
+    std::meta::info T, std::string_view pattern, const string_key_fixed_map_options& options = {})
+    -> std::meta::info
+{
+    return make_nonstatic_data_member_fixed_map(T, pattern, options, unprivileged_context());
 }
 
 #define RBOX_PUBLIC_NSDM_LOOKUP_API_2(transform_fn_concept, fixed_map_options_t)            \
     template <impl::lookup::transform_fn_concept TransformFn>                               \
-    consteval auto make_public_nonstatic_data_member_fixed_map(                             \
+    consteval auto make_nonstatic_data_member_fixed_map(                                    \
         std::meta::info T,                                                                  \
         std::string_view pattern,                                                           \
         const TransformFn& transform_fn,                                                    \
-        const fixed_map_options_t& options = {}) -> std::meta::info                         \
+        const fixed_map_options_t& options = {},                                            \
+        std::meta::access_context ctx = RBOX_CURRENT_CONTEXT) -> std::meta::info            \
     {                                                                                       \
         using namespace impl::lookup;                                                       \
         using Ret = transformed_key_t<std::invoke_result_t<TransformFn, std::string_view>>; \
@@ -444,8 +428,20 @@ consteval auto make_public_nonstatic_data_member_fixed_map(
             }                                                                               \
             return transform_fn(*name_opt);                                                 \
         };                                                                                  \
-        auto entries = lookup_nonstatic_data_members(T, pattern_transform_fn);              \
+        auto entries = lookup_class_members(                                                \
+            T, ctx.via(T), std::meta::nonstatic_data_members_of, pattern_transform_fn);     \
         return build_nonstatic_member_map(T, entries, options);                             \
+    }                                                                                       \
+                                                                                            \
+    template <impl::lookup::transform_fn_concept TransformFn>                               \
+    consteval auto make_public_nonstatic_data_member_fixed_map(                             \
+        std::meta::info T,                                                                  \
+        std::string_view pattern,                                                           \
+        const TransformFn& transform_fn,                                                    \
+        const fixed_map_options_t& options = {}) -> std::meta::info                         \
+    {                                                                                       \
+        return make_nonstatic_data_member_fixed_map(                                        \
+            T, pattern, transform_fn, options, unprivileged_context());                     \
     }
 
 // Overload (2.1)
@@ -455,14 +451,26 @@ RBOX_PUBLIC_NSDM_LOOKUP_API_2(skey_pattern_transform_fn, string_key_fixed_map_op
 
 #define RBOX_PUBLIC_NSDM_LOOKUP_API_3(transform_fn_concept, fixed_map_options_t) \
     template <impl::lookup::transform_fn_concept TransformFn>                    \
+    consteval auto make_nonstatic_data_member_fixed_map(                         \
+        std::meta::info T,                                                       \
+        const TransformFn& transform_fn,                                         \
+        const fixed_map_options_t& options = {},                                 \
+        std::meta::access_context ctx = RBOX_CURRENT_CONTEXT) -> std::meta::info \
+    {                                                                            \
+        using namespace impl::lookup;                                            \
+        auto entries = lookup_class_members(                                     \
+            T, ctx.via(T), std::meta::nonstatic_data_members_of, transform_fn);  \
+        return build_nonstatic_member_map(T, entries, options);                  \
+    }                                                                            \
+                                                                                 \
+    template <impl::lookup::transform_fn_concept TransformFn>                    \
     consteval auto make_public_nonstatic_data_member_fixed_map(                  \
         std::meta::info T,                                                       \
         const TransformFn& transform_fn,                                         \
         const fixed_map_options_t& options = {}) -> std::meta::info              \
     {                                                                            \
-        using namespace impl::lookup;                                            \
-        auto entries = lookup_nonstatic_data_members(T, transform_fn);           \
-        return build_nonstatic_member_map(T, entries, options);                  \
+        return make_nonstatic_data_member_fixed_map(                             \
+            T, transform_fn, options, unprivileged_context());                   \
     }
 
 // Overload (3.1)
@@ -473,6 +481,9 @@ RBOX_PUBLIC_NSDM_LOOKUP_API_3(skey_member_transform_fn, string_key_fixed_map_opt
 #undef RBOX_PUBLIC_NSDM_LOOKUP_API_2
 #undef RBOX_PUBLIC_NSDM_LOOKUP_API_3
 }  // namespace rbox
+
+#define RBOX_NONSTATIC_DATA_MEMBER_FIXED_MAP(T, ...) \
+    [:rbox::make_nonstatic_data_member_fixed_map(^^T, ##__VA_ARGS__):]
 
 #define RBOX_PUBLIC_NONSTATIC_DATA_MEMBER_FIXED_MAP(T, ...) \
     [:rbox::make_public_nonstatic_data_member_fixed_map(^^T, ##__VA_ARGS__):]
